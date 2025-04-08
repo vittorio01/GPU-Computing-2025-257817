@@ -1,5 +1,10 @@
 {
     "files.associations": {
-        "coo_vm_multiplication.h": "c"
+        "dataLib.h": "c",
+        "dataLib.c": "c",
+        "mathStats.h": "c",
+        "mathStats.c": "c",
+
     }
+    
 }

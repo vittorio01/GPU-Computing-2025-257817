@@ -1,4 +1,4 @@
-#include "math_stats.h"
+#include "mathStats.h"
 
 double math_geometric_mean(int n, double* numbers) {
     double product = 1;
