@@ -1,0 +1,28 @@
+SRC_FOLDER=src
+BIN_FOLDER=bin
+DATA_FOLDER=data 
+OBJ_FOLDER=obj
+
+SRC_MAIN=main.c
+OUT_MAIN=smm
+
+MATH_STATS_SOURCE = COO_VM_multiplication/COO_VM_multiplication.c
+MATH_STATS_OBJ = COO_VM_multiplication.o
+
+COO_VM_MUL_SOURCE = math_stats/math_stats.c
+COO_VM_MUL_OBJ = math_stats.o
+
+MATH_STATS: $(SRC_FOLDER)/$(MATH_STATS_SOURCE)
+	mkdir -p $(OBJ_FOLDER)
+	gcc -c $(SRC_FOLDER)/$(MATH_STATS_SOURCE) -o $(OBJ_FOLDER)/$(MATH_STATS_OBJ) -lm
+
+COO_VM_MUL: $(SRC_FOLDER)/$(COO_VM_MUL_SOURCE)
+	mkdir -p $(OBJ_FOLDER)
+	gcc -c $(SRC_FOLDER)/$(COO_VM_MUL_SOURCE) -o $(OBJ_FOLDER)/$(COO_VM_MUL_OBJ) -lm
+
+SMM: MATH_STATS COO_VM_MUL $(SRC_FOLDER)/$(SRC_MAIN)
+	mkdir -p $(BIN_FOLDER)
+	gcc -o $(BIN_FOLDER)/$(OUT_MAIN) $(SRC_FOLDER)/$(SRC_MAIN) $(OBJ_FOLDER)/$(COO_VM_MUL_OBJ) -lm $(OBJ_FOLDER)/$(MATH_STATS_OBJ)
+
+clean:
+	rm -rf $(BIN_FOLDER)
