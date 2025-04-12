@@ -40,7 +40,6 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
     matrix->rowArray = (int*) malloc (sizeof(int)*matrix->notNull);
     matrix->colArray = (int*) malloc (sizeof(int)*matrix->notNull);
     matrix->dataArray = (double*) malloc (sizeof(double)*matrix->notNull);
-    
     for (int i=0;i<matrix->notNull;i++) {
         if (fscanf(filePointer,"%d",&matrix->colArray[i])==EOF) {
             matrixDestroy(matrix);
@@ -48,13 +47,13 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
             return FILE_TRUNCATED;
         }
         if (fscanf(filePointer,"%d",&matrix->rowArray[i])==EOF) {
-            printf("Data format error: not enough elements\n");
             matrixDestroy(matrix);
+            fclose(filePointer);
             return FILE_TRUNCATED;
         }
         if (fscanf(filePointer,"%lf",&matrix->dataArray[i])==EOF) {
-            printf("Data format error: not enough elements\n");
             matrixDestroy(matrix);
+            fclose(filePointer);
             return FILE_TRUNCATED;
         }
     }

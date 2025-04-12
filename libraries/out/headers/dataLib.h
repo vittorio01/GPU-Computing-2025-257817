@@ -13,6 +13,8 @@
 #include "stdlib.h"
 #include <time.h>
 
+typedef enum {COO,CSR} sparseMatrixType;
+
 typedef struct SparseMatrix {
     int* rowArray;
     int* colArray;
@@ -29,6 +31,8 @@ typedef struct Vector {
 
 int matrixOpen(char* filePath, SparseMatrix* matrix);
 void matrixDestroy(SparseMatrix* matrix);
+
+void matrixConvertCSR(SparseMatrix* matrix);
 
 void vectorCreate(Vector* vector, int size);
 void vectorDestroy(Vector* vector);
