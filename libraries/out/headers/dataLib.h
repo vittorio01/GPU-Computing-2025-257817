@@ -16,12 +16,14 @@
 typedef enum {COO,CSR} sparseMatrixType;
 
 typedef struct SparseMatrix {
+    sparseMatrixType type;
     int* rowArray;
     int* colArray;
     double* dataArray;
     int rowSize;
     int colSize;
     int notNull;
+    int rowArraySize;
 } SparseMatrix;
 
 typedef struct Vector {
