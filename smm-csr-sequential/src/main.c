@@ -12,20 +12,20 @@
 #define WARMUP_CYCLES 2
 #define ITERATIONS 20
 
-typedef struct Results {
-    Vector* output;
-    int floats;
-} Results;
 
-void vmcoo_mul(Results *res,SparseMatrix* matrix,Vector* vector) {
-    res->output->dataArray=(double*) malloc (sizeof(double) * matrix->rowSize);
+void vmcsr_mul(Vector* output, int* floats, SparseMatrix* matrix,Vector* vector) {
+    output->size=matrix->rowSize;  
+    output->dataArray=(double*) malloc (sizeof(double) * matrix->rowSize);
     for (int i=0;i<matrix->rowSize;i++) {
-        res->output->dataArray[i]=0.0;
+        output->dataArray[i]=0.0;
     }
-    for (int i=0;i<matrix->notNull;i++) {
-        res->output->dataArray[(matrix->rowArray[i]-1)]+=(vector->dataArray[matrix->colArray[i]-1]*matrix->dataArray[i]);
+    
+    for (int i=0;i<(matrix->rowSize);i++) {
+        for (int j=(matrix->rowArray[i]);j<(matrix->rowArray[i+1]);j++) {
+            output->dataArray[i]+=matrix->dataArray[j]*vector->dataArray[matrix->colArray[j]];
+        }
     }
-    res->floats=matrix->rowSize+matrix->notNull;
+    *floats=matrix->rowSize+matrix->notNull;
 }
 
 int main(int argc, char** argv) {
@@ -62,39 +62,33 @@ int main(int argc, char** argv) {
     }
     
     matrixConvertCSR(&matrix);
-    printf("[");
-    for (int i=0;i<matrix.rowArraySize;i++) {
-        printf("%d,",matrix.rowArray[i]);
-    }
-    printf("]\n");
-    /*
+    
     printf("generating a vector of double for the moltiplication... \n");
     Vector vector;
     vectorCreate(&vector, matrix.colSize);
 
     
-    printf("performing sparse matrix COO to vector multiplication... \n");
+    printf("performing sparse matrix CSR to vector multiplication... \n");
 
     struct timeval tv;
     double times[ITERATIONS];
-    Results res;
-
+    Vector output;
+    int floats;
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         gettimeofday(&tv, NULL);
         times[i]=tv.tv_usec;
-        vmcoo_mul(&res,&matrix,&vector);
+        vmcsr_mul(&output,&floats,&matrix,&vector);
+        vectorDestroy(&output);
         gettimeofday(&tv, NULL);
         times[i] = tv.tv_usec - times[i]; 
     }
     double mean_value = math_geometric_mean(ITERATIONS,times);
     double variance = math_variance(ITERATIONS,times,mean_value);
     printf("Executed %d iterations, average time: %2f ms variance: %2f ms\n",ITERATIONS,(mean_value*pow(10,-3)),(variance*pow(10,-3)));
-    double flops= (double)(((double)(res.floats)/mean_value)*pow(10,-3));
+    double flops= (double)(((double)(floats)/mean_value)*pow(10,-3));
     printf("average Giga FLOP/s: %2f\n",flops);
-
     printf("Clearing heap...\n");
     vectorDestroy(&vector);
-    */
     matrixDestroy(&matrix);
     
     

@@ -41,7 +41,6 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
     matrix->colArray = (int*) malloc (sizeof(int)*matrix->notNull);
     matrix->dataArray = (double*) malloc (sizeof(double)*matrix->notNull);
     matrix->type=COO;
-    matrix->rowArraySize=0;
     for (int i=0;i<(matrix->notNull);i++) {
         if (fscanf(filePointer,"%d",&matrix->colArray[i])==EOF) {
             matrixDestroy(matrix);
@@ -72,25 +71,25 @@ void matrixConvertCSR(SparseMatrix* matrix) {
     for (int i=0;i<matrix->rowSize+1;i++) {
         newRow[i]=0;
     }
-    printf("[");
-    for (int i = 0; i < (matrix->rowSize+1); i++) {
-        newRow[matrix->rowArray[i] + 1]++;
-        printf("%d,",newRow[i]);
+   
+    for (int rowIndex=0;rowIndex<matrix->notNull;rowIndex++) {
+        newRow[(matrix->rowArray[rowIndex])+1]++;
     }
-    printf("]\n");
-    for (int i = 0; i < matrix->notNull; i++) {
+   
+    for (int i = 0; i < matrix->rowSize; i++) {
         newRow[i + 1] += newRow[i];
     }
     free(matrix->rowArray);
     matrix->rowArray=newRow;
-    matrix->rowArraySize=matrix->rowSize+1;
-
 }
 
 void matrixDestroy(SparseMatrix* matrix) {
     free(matrix->colArray);
     free(matrix->dataArray);
     free(matrix->rowArray);
+    matrix->colArray=NULL;
+    matrix->dataArray=NULL;
+    matrix->rowArray=NULL;
 }
 
 void vectorCreate(Vector* vector, int size) {
@@ -103,4 +102,5 @@ void vectorCreate(Vector* vector, int size) {
 
 void vectorDestroy(Vector* vector) {
     free(vector->dataArray);
+    vector->dataArray=NULL;
 }

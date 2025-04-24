@@ -23,7 +23,6 @@ typedef struct SparseMatrix {
     int rowSize;
     int colSize;
     int notNull;
-    int rowArraySize;
 } SparseMatrix;
 
 typedef struct Vector {
