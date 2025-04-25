@@ -1,15 +1,34 @@
-#include <stdio.h>
-#include <stdlib.h>
-
+#include <iostream>
+#include <math.h>
 __global__
-void print_gpu(void) {
-    printf("Hello from %d %d\n",threadIdx.x,blockIdx.x);
+void add(int n, float *x, float *y) {
+    for (int i = 0; i < n; i++) y[i] = x[i] + y[i];
 }
+int main(void) {
+    int N = 256;
+    float *x, *y;
 
-int main() {
-    printf("Starting GPU program");
-    print_gpu<<<2, 1>>>();
+    cudaError_t err = cudaMallocManaged(&x, N*sizeof(float));
+    if (err != cudaSuccess) {
+        std::cerr << "Errore in cudaMallocManaged: " << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+    cudaMallocManaged(&y, N*sizeof(float));
+
+    for (int i = 0; i < N; i++) {
+        x[i] = 1.0f;
+        y[i] = 2.0f;
+    }
+
+    add<<<1, 1>>>(N, x, y);
 
     cudaDeviceSynchronize();
-    return 0;
+
+    float maxError = 0.0f;
+    for (int i = 0; i < N; i++)
+    maxError = fmax(maxError, fabs(y[i]-3.0f));
+    std::cout << "Max error: " << maxError << std::endl;
+
+    cudaFree(x);
+    cudaFree(y);
 }
