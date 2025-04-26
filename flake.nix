@@ -15,13 +15,14 @@
         };
 
         cudaVersion = "12.8";
-        cudaPkgs = pkgs.cudaPackages_12_8;
+        cudaPkgs = pkgs.cudaPackages;
       in {
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            cudaPkgs.cudatoolkit
+            #cudaPkgs.cudatoolkit
             cudaPkgs.cuda_nvcc
             cudaPkgs.cuda_gdb
+            cudaPkgs.cuda_cudart
             gcc
             gnumake
             valgrind
@@ -30,7 +31,8 @@
           shellHook = ''
             export CUDA_PATH=${cudaPkgs.cudatoolkit}
             export PATH=$CUDA_PATH/bin:$PATH
-            export LD_LIBRARY_PATH=$CUDA_PATH/lib:$LD_LIBRARY_PATH
+            export LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH
+            #export LD_LIBRARY_PATH=$CUDA_PATH/lib:$LD_LIBRARY_PATH
           '';
         };
       });
