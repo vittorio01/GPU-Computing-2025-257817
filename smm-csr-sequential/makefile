@@ -7,9 +7,11 @@ OUT_MAIN=smm_csr_sequential
 
 LIB_FOLDER=../libraries/
 
+CMP=gcc
+
 SMM_CSR_SEQUENTIAL: MAKE_LIBS $(SRC_FOLDER)/$(SRC_MAIN)
 	mkdir -p $(BIN_FOLDER)
-	gcc -o $(BIN_FOLDER)/$(OUT_MAIN) $(SRC_FOLDER)/$(SRC_MAIN) $(LIB_OBJ_FOLDER)/*.o -I $(LIB_HEADERS_FOLDER) -lm -g
+	$(CMP) -o $(BIN_FOLDER)/$(OUT_MAIN) $(SRC_FOLDER)/$(SRC_MAIN) $(LIB_OBJ_FOLDER)/*.o -I $(LIB_HEADERS_FOLDER) -lm -g
 
 clean: CLEAR_LIBS
 	rm -rf $(BIN_FOLDER)
