@@ -9,33 +9,54 @@
 
 #define MATRIX_READED 0
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "stdio.h"
 #include "stdlib.h"
 #include <time.h>
+#include <cuda_runtime.h>
 
 typedef enum {COO,CSR} sparseMatrixType;
+typedef enum {DEVICE,HOST,NONE} objectAllocation;
 
 typedef struct SparseMatrix {
-    sparseMatrixType type;
     int* rowArray;
     int* colArray;
     double* dataArray;
+
     int rowSize;
     int colSize;
     int notNull;
+
+    sparseMatrixType type;
+    objectAllocation pos;
+
 } SparseMatrix;
 
 typedef struct Vector {
     double* dataArray;
     int size;
+
+    objectAllocation pos;
 } Vector;
 
 int matrixOpen(char* filePath, SparseMatrix* matrix);
-void matrixDestroy(SparseMatrix* matrix);
+cudaError_t matrixDestroy(SparseMatrix* matrix);
 
 void matrixConvertCSR(SparseMatrix* matrix);
 
 void vectorCreate(Vector* vector, int size);
-void vectorDestroy(Vector* vector);
+cudaError_t vectorDestroy(Vector* vector);
+
+cudaError_t cudaMatrixUnload(SparseMatrix* matrix);
+cudaError_t cudaMatrixLoad(SparseMatrix* matrix);
+cudaError_t cudaVectorLoad(Vector* vector);
+cudaError_t cudaVectorUnload(Vector* vector);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif 

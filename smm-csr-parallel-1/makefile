@@ -3,13 +3,13 @@ BIN_FOLDER=bin
 DATA_FOLDER=../data 
 
 SRC_MAIN=main.cu
-OUT_MAIN=smm-csr-gpu-1
+OUT_MAIN=smm-csr-parallel-1
 
 LIB_FOLDER=../libraries/
 
 CMP=nvcc
 
-SMM-CSR-GPU-1: MAKE_LIBS $(SRC_FOLDER)/$(SRC_MAIN)
+SMM-CSR-PARALLEL-1: MAKE_LIBS $(SRC_FOLDER)/$(SRC_MAIN)
 	mkdir -p $(BIN_FOLDER)
 	$(CMP) -o $(BIN_FOLDER)/$(OUT_MAIN) $(SRC_FOLDER)/$(SRC_MAIN) -lm $(LIB_OBJ_FOLDER)/*.o -I $(LIB_HEADERS_FOLDER)
 

@@ -10,42 +10,7 @@
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
-cudaError_t cudaVectorLoad(Vector* vector) {
-    Vector cudaVector;
-    cudaVector.size=vector->size;
-    
-    cudaError_t result;
-    result=cudaMalloc((void**)&cudaVector.dataArray,(cudaVector.size*sizeof(double)));
-    if (result!=cudaSuccess) return result;
 
-    result=cudaMemcpy(cudaVector.dataArray,vector->dataArray,(cudaVector.size*sizeof(double)),cudaMemcpyHostToDevice);
-    if (result!=cudaSuccess) return result;
-    vectorDestroy(vector);
-    vector=&cudaVector;
-    return cudaSuccess;
-}
-
-cudaError_t cudaVectorUnload(Vector* vector) {
-    Vector heapVector;
-    heapVector.size=vector->size;
-
-    cudaError_t result;
-    result=cudaMemcpy(heapVector.dataArray,vector->dataArray,(heapVector.size*sizeof(double)),cudaMemcpyDeviceToHost);
-    if (result!=cudaSuccess) return result;
-
-    result=cudaFree(vector->dataArray);
-    if (result!=cudaSuccess) return result;
-    vector=&heapVector;
-    return cudaSuccess;
-}
-
-cudaError_t cudaMatrixLoad(Matrix* matrix) {
-    Matrix cudaMatrix;
-}
-
-cudaError_t cudaMatrixUnload(Matrix* matrix) {
-
-}
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -90,12 +55,18 @@ int main(int argc, char** argv) {
     cudaError_t cudaResult;
     cudaResult=cudaVectorLoad(&vector);
     if (cudaResult!=cudaSuccess) {
-        printf("Error during data transfer phase: %d \n",cudaResult);
+        printf("Error during vector data transfer phase: %s \n",cudaGetErrorString(cudaResult));
         return DATA_TRANSFER_ERROR;
     }
-    cudaResult=cudaVectorUnload(&vector);
+    cudaResult=cudaMatrixLoad(&matrix);
     if (cudaResult!=cudaSuccess) {
-        printf("Error during data transfer phase: %d \n",cudaResult);
+        printf("Error during matrix data transfer phase: %s \n",cudaGetErrorString(cudaResult));
+        return DATA_TRANSFER_ERROR;
+    }
+    printf("copying results to the RAM memory...\n");
+    cudaResult=cudaMatrixUnload(&matrix);
+    if (cudaResult!=cudaSuccess) {
+        printf("Error during vector data transfer phase: %s \n",cudaGetErrorString(cudaResult));
         return DATA_TRANSFER_ERROR;
     }
     
