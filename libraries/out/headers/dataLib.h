@@ -48,10 +48,11 @@ cudaError_t matrixDestroy(SparseMatrix* matrix);
 void matrixConvertCSR(SparseMatrix* matrix);
 
 void vectorCreate(Vector* vector, int size);
+void vectorCreateRandom(Vector* vector, int size);
 cudaError_t vectorDestroy(Vector* vector);
 
-cudaError_t cudaMatrixUnload(SparseMatrix* matrix);
 cudaError_t cudaMatrixLoad(SparseMatrix* matrix);
+cudaError_t cudaMatrixUnload(SparseMatrix* matrix);
 cudaError_t cudaVectorLoad(Vector* vector);
 cudaError_t cudaVectorUnload(Vector* vector);
 

@@ -7,7 +7,7 @@ OUT_MAIN=smm_csr_sequential
 
 LIB_FOLDER=../libraries/
 
-CMP=gcc
+CMP=nvcc
 
 SMM_CSR_SEQUENTIAL: MAKE_LIBS $(SRC_FOLDER)/$(SRC_MAIN)
 	mkdir -p $(BIN_FOLDER)

@@ -66,7 +66,6 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
 
 void matrixConvertCSR(SparseMatrix* matrix) {
     if (matrix->type==CSR) return;
-    printf("converting to CSR...\n");
     matrix->type=CSR;
     int *newRow= (int*) malloc (sizeof(int) * (matrix->rowSize+1));
     for (int i=0;i<matrix->rowSize+1;i++) {
@@ -109,14 +108,21 @@ cudaError_t matrixDestroy(SparseMatrix* matrix) {
 }
 
 void vectorCreate(Vector* vector, int size) {
+    vector->dataArray=(double*) calloc (size,sizeof(double));
+    vector->size=size;
+    vector->pos=HOST;
+}
+
+void vectorCreateRandom(Vector* vector, int size) {
     vector->dataArray= (double*) malloc (sizeof(double)*size);
     vector->size=size;
     vector->pos=HOST;
     srand(time(NULL));
     for (int i=0;i<size;i++) {
-        vector->dataArray[i]=(double) rand() / RAND_MAX;
+        vector->dataArray[i]=1;//vector->dataArray[i]=(double) rand() / RAND_MAX;
     }
 }
+
 
 cudaError_t vectorDestroy(Vector* vector) {
     cudaError_t result;
@@ -141,7 +147,6 @@ cudaError_t cudaVectorLoad(Vector* vector) {
     cudaError_t result;
     result=cudaMalloc((void**)&cudaData,(vector->size*sizeof(double)));
     if (result!=cudaSuccess) return result;
-
     result=cudaMemcpy(cudaData,vectorData,(vector->size*sizeof(double)),cudaMemcpyHostToDevice);
     if (result!=cudaSuccess) return result;
     free(vectorData);
@@ -153,7 +158,6 @@ cudaError_t cudaVectorLoad(Vector* vector) {
 cudaError_t cudaVectorUnload(Vector* vector) {
     double* cudaData=vector->dataArray;
     double* heapData=(double*) malloc (vector->size*sizeof(double));
-
     cudaError_t result;
     
     result=cudaMemcpy(heapData,cudaData,(vector->size*sizeof(double)),cudaMemcpyDeviceToHost);
@@ -179,19 +183,21 @@ cudaError_t cudaMatrixLoad(SparseMatrix* matrix) {
     cudaError_t result;
     result=cudaMalloc((void**)&cudaColArray,(matrix->notNull*sizeof(int)));
     if (result!=cudaSuccess) return result;
+    
     result=cudaMemcpy(cudaColArray,matrixColArray,(matrix->notNull*sizeof(int)),cudaMemcpyHostToDevice);
     if (result!=cudaSuccess) return result;
-
+    
     result=cudaMalloc((void**)&cudaDataArray,(matrix->notNull*sizeof(double)));
     if (result!=cudaSuccess) return result;
+    
     result=cudaMemcpy(cudaDataArray,matrixDataArray,(matrix->notNull*sizeof(double)),cudaMemcpyHostToDevice);
     if (result!=cudaSuccess) return result;
-
+    
     if (matrix->type==CSR) {
         result=cudaMalloc((void**)&cudaRowArray,((matrix->rowSize)+1)*sizeof(int));
         if (result!=cudaSuccess) return result;
-
-        result=cudaMemcpy(cudaRowArray,matrixRowArray,(matrix->notNull*sizeof(int)),cudaMemcpyHostToDevice);
+        
+        result=cudaMemcpy(cudaRowArray,matrixRowArray,((matrix->rowSize+1)*sizeof(int)),cudaMemcpyHostToDevice);
     } else {
         result=cudaMalloc((void**)&cudaRowArray,(matrix->notNull)*sizeof(int));
         if (result!=cudaSuccess) return result;
@@ -199,7 +205,7 @@ cudaError_t cudaMatrixLoad(SparseMatrix* matrix) {
         result=cudaMemcpy(cudaRowArray,matrixRowArray,((matrix->notNull)*sizeof(int)),cudaMemcpyHostToDevice);
     }
     if (result!=cudaSuccess) return result;
-
+   
     free(matrixColArray);
     free(matrixRowArray);
     free(matrixDataArray);
@@ -231,7 +237,7 @@ cudaError_t cudaMatrixUnload(SparseMatrix* matrix) {
     if (result!=cudaSuccess) return result;
 
     if (matrix->type==CSR) {
-        result=cudaMemcpy(heapRowArray,cudaRowArray,(matrix->notNull*sizeof(int)),cudaMemcpyDeviceToHost);
+        result=cudaMemcpy(heapRowArray,cudaRowArray,((matrix->rowSize+1)*sizeof(int)),cudaMemcpyDeviceToHost);
     } else {
         
         result=cudaMemcpy(heapRowArray,cudaRowArray,((matrix->notNull)*sizeof(int)),cudaMemcpyDeviceToHost);
