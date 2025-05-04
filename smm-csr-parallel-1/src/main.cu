@@ -13,32 +13,37 @@
 #define WARMUP_CYCLES 2
 #define ITERATIONS 10
 
-#define THREADS_NUMBER  10
+#define THREADS_NUMBER  256
 #define BLOCK_NUMBER    10
 #define TOTAL_THREADS   THREADS_NUMBER*BLOCK_NUMBER
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    
     int tIdx=blockIdx.x*blockDim.x+threadIdx.x;
     int row;
     int endRow;
     double accumulator;
-    unsigned int rowNumber=(matrix->rowSize);
-    unsigned int threadShift=TOTAL_THREADS;
     
-    for (int i=tIdx;i<rowNumber;i+=threadShift) {
+    unsigned int rowNumber=(matrix->rowSize);
+    
+    unsigned int threadShift=TOTAL_THREADS;
+    double mtxElement;
+    double arrayElement;
+    
+    for (int i=tIdx;i<rowNumber-1;i+=threadShift) {
         row=matrix->rowArray[i];
         endRow=matrix->rowArray[i+1];
         accumulator=0;
-
-        for (int colIndex=row;colIndex<endRow;colIndex++) {
-            accumulator+=matrix->dataArray[colIndex]*input->dataArray[matrix->colArray[colIndex]];
-            
-        } 
         
-        output->dataArray[i]=accumulator;
-    }
-    
+        for (int colIndex=row;colIndex<endRow;colIndex++) {
+            
+            mtxElement=matrix->dataArray[colIndex];
+            
+            arrayElement=input->dataArray[matrix->colArray[colIndex]];
+            
+            accumulator+=mtxElement*arrayElement;  
+        } 
+        output->dataArray[i]=accumulator;       
+    }    
 }
 
 
@@ -77,51 +82,65 @@ int main(int argc, char** argv) {
     printf("Converting into CSR ... \n");
     matrixConvertCSR(&matrix);
     
-    printf("generating a vector of double for the moltiplication... \n");
+    
+    printf("generating input and output vectors for the moltiplication... \n");
     Vector vector;
     vectorCreateRandom(&vector, matrix.colSize);
+    Vector output;
+    vectorCreate(&output,matrix.rowSize);
 
     printf("copying data in the CUDA memory... \n");
     cudaError_t cudaResult;
-    cudaResult=cudaVectorLoad(&vector);
-    if (cudaResult!=cudaSuccess) {
-        printf("Error during vector data transfer phase: %s \n",cudaGetErrorString(cudaResult));
-        return DATA_TRANSFER_ERROR;
+    int currentDevice;
+    cudaGetDevice(&currentDevice);
+    cudaResult=matrixPrefetch(&matrix,currentDevice);
+    if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during matrix prefetching on device %d: %s\n", currentDevice,cudaGetErrorString(cudaResult));
+        return cudaResult;
     }
-    cudaResult=cudaMatrixLoad(&matrix);
-    if (cudaResult!=cudaSuccess) {
-        printf("Error during matrix data transfer phase: %s \n",cudaGetErrorString(cudaResult));
-        return DATA_TRANSFER_ERROR;
+    cudaResult=vectorPrefetch(&vector,currentDevice);
+    if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during input vector prefetching on device %d: %s\n", currentDevice,cudaGetErrorString(cudaResult));
+        return cudaResult;
+    }
+    cudaResult=vectorPrefetch(&output,currentDevice);
+    if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during output vector prefetching on device %d: %s\n", currentDevice,cudaGetErrorString(cudaResult));
+        return cudaResult;
     }
     printf("performing matrix to vector multiplication...\n");
-    Vector output;
-    vectorCreate(&output,matrix.rowSize);
-    cudaVectorLoad(&output);
+    
+    
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-
-    double times[ITERATIONS];
-    float milliseconds=0;
+    
+    float times[ITERATIONS];
+    
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         cudaEventRecord(start);
-    
         vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER>>>(&output,&matrix,&vector);
-        cudaDeviceSynchronize();
-
+        
         cudaEventRecord(stop);
-        cudaEventSynchronize(stop); 
-        cudaEventElapsedTime(&milliseconds, start,stop);
-        times[i]=(double) milliseconds;
-        printf("iteration %d took %2f\n",i,times[i]);
+        cudaResult=cudaEventSynchronize(stop); 
+        if (cudaResult != cudaSuccess) {
+            fprintf(stderr, "Error during kernel execution: %s\n", cudaGetErrorString(cudaResult));
+            return cudaResult;
+        }
+        cudaEventElapsedTime(&times[i], start,stop);
+        printf("iteration %d took %2f ms\n",i,times[i]);
+        
+        
+        
     }
+    
 
-    double mean_value = math_geometric_mean(ITERATIONS,times);
-    double variance = math_variance(ITERATIONS,times,mean_value);
+    float mean_value = math_geometric_mean(ITERATIONS,times);
+    float variance = math_variance(ITERATIONS,times,mean_value);
     int floats=matrix.notNull;
-    printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,(mean_value),(variance));
-    double flops= (double)(((double)(floats)/(mean_value))*pow(10,-3));
-    printf("average Giga FLOP/s: %2f\n",flops);
+    printf("Executed %d iterations, floating point operations: %d average time: %f ms variance: %f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
+    double flops= (double)((double)floats)/(mean_value*pow(10,-3));
+    printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
 
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);
@@ -132,3 +151,4 @@ int main(int argc, char** argv) {
     
     return 0;
 }   
+

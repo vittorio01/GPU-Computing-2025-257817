@@ -68,23 +68,23 @@ int main(int argc, char** argv) {
     printf("performing sparse matrix CSR to vector multiplication... \n");
 
     struct timeval tv;
-    double times[ITERATIONS];
+    float times[ITERATIONS];
     Vector output;
     vectorCreate(&output,matrix.rowSize);
     int floats=0;
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         gettimeofday(&tv, NULL);
         times[i]=tv.tv_usec;
-        printf("iteration %d took %2f\n",i,times[i]);
+        printf("iteration %d took %f\n",i,times[i]);
         vmcsr_mul(&output,&floats,&matrix,&vector);
         gettimeofday(&tv, NULL);
         times[i] = (tv.tv_usec - times[i]); 
     }
-    double mean_value = math_geometric_mean(ITERATIONS,times);
-    double variance = math_variance(ITERATIONS,times,mean_value);
-    printf("Executed %d iterations, floating point operations: %d average time: %2f micros variance: %2f micros\n",ITERATIONS,floats,(mean_value),(variance));
-    double flops= (double)(((double)(floats)/(mean_value)));
-    printf("average Giga FLOP/s: %2f\n",flops);
+    float mean_value = math_geometric_mean(ITERATIONS,times);
+    float variance = math_variance(ITERATIONS,times,mean_value);
+    printf("Executed %d iterations, floating point operations: %d average time: %f micros variance: %f micros\n",ITERATIONS,floats,(mean_value),(variance));
+    float flops= (double)(((double)(floats)/(mean_value)));
+    printf("average Giga FLOP/s: %f\n",flops);
     printf("Clearing heap...\n");
     vectorDestroy(&vector);
     matrixDestroy(&matrix);

@@ -7,8 +7,8 @@ extern "C" {
 
 #include <math.h>
 
-double math_geometric_mean(int n, double* numbers);
-double math_variance(int n, double* numbers,double mean);
+float math_geometric_mean(int n, float* numbers);
+float math_variance(int n, float* numbers,float mean);
 
 #ifdef __cplusplus
 }
