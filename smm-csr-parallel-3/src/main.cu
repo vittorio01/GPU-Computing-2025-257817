@@ -13,36 +13,56 @@
 #define WARMUP_CYCLES 2
 #define ITERATIONS 10
 
-#define THREADS_NUMBER  256
-#define BLOCK_NUMBER    10
+#define THREADS_NUMBER      1
+#define BLOCK_NUMBER        1
+#define SHARED_MEMORY_DIM   8 //49152 
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    int tIdx=blockIdx.x*blockDim.x+threadIdx.x;
-    int row;
-    int endRow;
-    double accumulator;
-    
-    unsigned int rowNumber=(matrix->rowSize);
-    
-    unsigned int threadShift=gridDim.x*blockDim.x;
-    double mtxElement;
-    double arrayElement;
-    
-    for (int i=tIdx;i<rowNumber;i+=threadShift) {
-        row=matrix->rowArray[i];
-        endRow=matrix->rowArray[i+1];
-        accumulator=0;
+    int threadNumber=(blockIdx.x*blockDim.x)+threadIdx.x;
+    int threadShift=gridDim.x*blockDim.x;
+
+    extern __shared__ double shared[];
+    int sharedMemorySize=SHARED_MEMORY_DIM/sizeof(double);
+    int sharedDataPerThread=sharedMemorySize/THREADS_NUMBER;
+    for (int i=threadNumber;i<matrix->rowSize;i+=threadShift) {
         
-        for (int colIndex=row;colIndex<endRow;colIndex++) {
+        int startRow=matrix->rowArray[i];
+        int endRow=matrix->rowArray[i+1];
+        int elements=endRow-startRow;
+        printf("thread %d computes for row %d with %d elements (%d %d)\n",threadNumber,i,elements,startRow,endRow);
+        double acc=0;
+        for (int windowPos=0;windowPos<input->size;windowPos+=sharedMemorySize) {
+            printf("Window position -> %d\n",windowPos);
+            //loading phase 
+            for (int j=0;j<sharedDataPerThread;j++) {
+                int sharedIndex=(threadIdx.x*sharedDataPerThread)+j;
+                shared[sharedIndex]=input->dataArray[sharedIndex+windowPos];
+            }
+            __syncthreads();
+            //computing phase
+            if (elements>0) {
+                for (int j=startRow+(endRow-elements);elements>0;j++) {
+                    
+                    int mxCol=matrix->colArray[j];
+                    
+                    if (mxCol>=windowPos+sharedMemorySize) break;
+                    
+                    printf("Computing elements on MXcol %d and shared position %d (%d left)\n",mxCol,mxCol-windowPos,elements);
+                    acc+=matrix->dataArray[j]*shared[mxCol-windowPos];
+                    elements--;
+                
+                }
+            } 
+            if (elements==0) {
+                elements=-1;
+                output->dataArray[i]=acc;
+                printf("Result saved ->>> %d: row %d, value %2f\n",threadNumber,i,acc);
             
-            mtxElement=matrix->dataArray[colIndex];
-            
-            arrayElement=input->dataArray[matrix->colArray[colIndex]];
-            
-            accumulator+=mtxElement*arrayElement;  
-        } 
-        output->dataArray[i]=accumulator;       
-    }    
+            }
+            __syncthreads();
+        
+        }
+    }
 }
 
 
@@ -118,7 +138,7 @@ int main(int argc, char** argv) {
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         cudaEventRecord(start);
-        vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER>>>(&output,&matrix,&vector);
+        vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER,SHARED_MEMORY_DIM>>>(&output,&matrix,&vector);
         
         cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 

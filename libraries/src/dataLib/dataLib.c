@@ -145,15 +145,14 @@ cudaError_t vectorPrefetch(Vector* vector,int cudaDevice)  {
 }
 cudaError_t matrixPrefetch(SparseMatrix* matrix,int cudaDevice) {
     cudaError_t result;
-    result=cudaMemPrefetchAsync(matrix->colArray, (matrix->notNull)*sizeof(double),cudaDevice,0);
+    result=cudaMemPrefetchAsync(matrix->colArray, (matrix->notNull)*sizeof(int),cudaDevice,0);
     if (result!=cudaSuccess) return result;
-    printf("marker\n");
     result=cudaMemPrefetchAsync((void*)matrix->dataArray, (matrix->notNull)*sizeof(double),cudaDevice,0);
     if (result!=cudaSuccess) return result;
     if (matrix->type==CSR) {
-        result=cudaMemPrefetchAsync((void*)matrix->rowArray, ((matrix->rowSize)+1)*sizeof(double),cudaDevice,0);
+        result=cudaMemPrefetchAsync((void*)matrix->rowArray, ((matrix->rowSize)+1)*sizeof(int),cudaDevice,0);
     } else {
-        result=cudaMemPrefetchAsync((void*)matrix->rowArray, (matrix->notNull)*sizeof(double),cudaDevice,0);
+        result=cudaMemPrefetchAsync((void*)matrix->rowArray, (matrix->notNull)*sizeof(int),cudaDevice,0);
     }
     return result;
 }

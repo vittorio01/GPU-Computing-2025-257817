@@ -11,37 +11,50 @@
 #define DATA_TRANSFER_ERROR 11
 
 #define WARMUP_CYCLES 2
-#define ITERATIONS 10
+#define ITERATIONS 1
 
-#define THREADS_NUMBER  256
-#define BLOCK_NUMBER    10
+#define THREADS_NUMBER      10 //256
+#define BLOCK_NUMBER        10 //10
+#define SHARED_MEMORY_DIM   49152       
+
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    int tIdx=blockIdx.x*blockDim.x+threadIdx.x;
-    int row;
-    int endRow;
-    double accumulator;
-    
+    extern __shared__ double shared[];
+    int tIdx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    int dataNumber=SHARED_MEMORY_DIM/(2*sizeof(double));
+    int chunkSize=dataNumber/blockDim.x;
+
+    double* sharedDataArray=shared;
+    int* sharedColArray = (int*)(shared + (dataNumber));
+
+    double* threadDataArray=sharedDataArray+(threadIdx.x*chunkSize);
+    int* threadColArray=sharedColArray+(threadIdx.x*chunkSize);
+
     unsigned int rowNumber=(matrix->rowSize);
-    
     unsigned int threadShift=gridDim.x*blockDim.x;
-    double mtxElement;
-    double arrayElement;
-    
+
     for (int i=tIdx;i<rowNumber;i+=threadShift) {
-        row=matrix->rowArray[i];
-        endRow=matrix->rowArray[i+1];
-        accumulator=0;
-        
-        for (int colIndex=row;colIndex<endRow;colIndex++) {
-            
-            mtxElement=matrix->dataArray[colIndex];
-            
-            arrayElement=input->dataArray[matrix->colArray[colIndex]];
-            
-            accumulator+=mtxElement*arrayElement;  
-        } 
-        output->dataArray[i]=accumulator;       
+        int startRow=matrix->rowArray[i];
+        int endRow=matrix->rowArray[i+1];
+        int elements=endRow-startRow;
+        double acc=0;
+        //processing in base of the dedicated shared memory chunk size
+        for (int chunkPos=0;chunkPos<elements;chunkPos+=chunkSize) {
+            int chunkElements=min(chunkSize, elements-chunkPos);
+            //loading phase for a chunk of a row 
+            for(int j=0;j<chunkElements;j++) {
+                threadDataArray[j]=matrix->dataArray[startRow+chunkPos+j];
+                threadColArray[j]=matrix->colArray[startRow+chunkPos+j];
+            }
+            //__syncthreads();
+            //computing phase for a chunk of a row
+            for(int j=0;j<chunkElements;j++) {
+                acc+=threadDataArray[j]*input->dataArray[threadColArray[j]];
+            }
+            //__syncthreads();
+        }
+        output->dataArray[i]=acc; 
     }    
 }
 
@@ -118,7 +131,7 @@ int main(int argc, char** argv) {
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         cudaEventRecord(start);
-        vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER>>>(&output,&matrix,&vector);
+        vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER,SHARED_MEMORY_DIM >>>(&output,&matrix,&vector);
         
         cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
@@ -133,7 +146,6 @@ int main(int argc, char** argv) {
         
     }
     
-
     float mean_value = math_geometric_mean(ITERATIONS,times);
     float variance = math_variance(ITERATIONS,times,mean_value);
     int floats=matrix.notNull;
