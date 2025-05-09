@@ -10,23 +10,25 @@
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
-#define WARMUP_CYCLES 2
-#define ITERATIONS 10
+#define WARMUP_CYCLES 5
+#define ITERATIONS 20
 
 #define THREADS_NUMBER  256
 #define BLOCK_NUMBER    10
+
+
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     int tIdx=blockIdx.x*blockDim.x+threadIdx.x;
     int row;
     int endRow;
-    double accumulator;
+    float accumulator;
     
     unsigned int rowNumber=(matrix->rowSize);
     
     unsigned int threadShift=gridDim.x*blockDim.x;
-    double mtxElement;
-    double arrayElement;
+    float mtxElement;
+    float arrayElement;
     
     for (int i=tIdx;i<rowNumber;i+=threadShift) {
         row=matrix->rowArray[i];
@@ -117,29 +119,28 @@ int main(int argc, char** argv) {
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
-        cudaEventRecord(start);
-        vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER>>>(&output,&matrix,&vector);
+        if (i>=0) cudaEventRecord(start);
+        vmcsr_mul<<<BLOCK_NUMBER,THREADS_NUMBER>>>(&output,&matrix,&vector);
         
-        cudaEventRecord(stop);
+        if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
         if (cudaResult != cudaSuccess) {
             fprintf(stderr, "Error during kernel execution: %s\n", cudaGetErrorString(cudaResult));
             return cudaResult;
         }
-        cudaEventElapsedTime(&times[i], start,stop);
-        printf("iteration %d took %2f ms\n",i,times[i]);
-        
-        
-        
+        if (i>=0) {
+            cudaEventElapsedTime(&times[i], start,stop);
+            printf("iteration %d took %f ms\n",i,times[i]);
+        }
     }
     
 
     float mean_value = math_geometric_mean(ITERATIONS,times);
     float variance = math_variance(ITERATIONS,times,mean_value);
-    int floats=matrix.notNull;
+    int floats=2*matrix.notNull;
     printf("Executed %d iterations, floating point operations: %d average time: %f ms variance: %f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
-    double flops= (double)((double)floats)/(mean_value*pow(10,-3));
-    printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
+    float flops= (float)((float)floats)/(mean_value*pow(10,-3));
+    printf("average GFLOP/s: %f\n",flops*pow(10,-9));
 
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);

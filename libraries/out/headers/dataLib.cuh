@@ -19,7 +19,7 @@ typedef enum {DEVICE,HOST,NONE} objectAllocation;
 typedef struct SparseMatrix {
     int* rowArray;
     int* colArray;
-    double* dataArray;
+    float* dataArray;
 
     int rowSize;
     int colSize;
@@ -31,7 +31,7 @@ typedef struct SparseMatrix {
 } SparseMatrix;
 
 typedef struct Vector {
-    double* dataArray;
+    float* dataArray;
     int size;
 
     objectAllocation pos;

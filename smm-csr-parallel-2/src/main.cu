@@ -19,16 +19,16 @@
 
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    extern __shared__ double shared[];
+    extern __shared__ float shared[];
     int tIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    int dataNumber=SHARED_MEMORY_DIM/(2*sizeof(double));
+    int dataNumber=SHARED_MEMORY_DIM/(2*sizeof(float));
     int chunkSize=dataNumber/blockDim.x;
 
-    double* sharedDataArray=shared;
+    float* sharedDataArray=shared;
     int* sharedColArray = (int*)(shared + (dataNumber));
 
-    double* threadDataArray=sharedDataArray+(threadIdx.x*chunkSize);
+    float* threadDataArray=sharedDataArray+(threadIdx.x*chunkSize);
     int* threadColArray=sharedColArray+(threadIdx.x*chunkSize);
 
     unsigned int rowNumber=(matrix->rowSize);
@@ -38,7 +38,7 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
         int startRow=matrix->rowArray[i];
         int endRow=matrix->rowArray[i+1];
         int elements=endRow-startRow;
-        double acc=0;
+        float acc=0;
         //processing in base of the dedicated shared memory chunk size
         for (int chunkPos=0;chunkPos<elements;chunkPos+=chunkSize) {
             int chunkElements=min(chunkSize, elements-chunkPos);
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         cudaEventRecord(start);
-        vmcsr_mul<<<THREADS_NUMBER,BLOCK_NUMBER,SHARED_MEMORY_DIM >>>(&output,&matrix,&vector);
+        vmcsr_mul<<<BLOCK_NUMBER,THREADS_NUMBER,SHARED_MEMORY_DIM >>>(&output,&matrix,&vector);
         
         cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
             return cudaResult;
         }
         cudaEventElapsedTime(&times[i], start,stop);
-        printf("iteration %d took %2f ms\n",i,times[i]);
+        printf("iteration %d took %f ms\n",i,times[i]);
         
         
         
@@ -150,8 +150,8 @@ int main(int argc, char** argv) {
     float variance = math_variance(ITERATIONS,times,mean_value);
     int floats=matrix.notNull;
     printf("Executed %d iterations, floating point operations: %d average time: %f ms variance: %f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
-    double flops= (double)((double)floats)/(mean_value*pow(10,-3));
-    printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
+    float flops= (float)((float)floats)/(mean_value*pow(10,-3));
+    printf("average GFLOP/s: %f\n",flops*pow(10,-9));
 
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);

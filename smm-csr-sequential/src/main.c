@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     
     matrixConvertCSR(&matrix);
     
-    printf("generating a vector of double for the moltiplication... \n");
+    printf("generating a vector of float for the moltiplication... \n");
     Vector vector;
     vectorCreate(&vector, matrix.colSize);
 
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
     float mean_value = math_geometric_mean(ITERATIONS,times);
     float variance = math_variance(ITERATIONS,times,mean_value);
     printf("Executed %d iterations, floating point operations: %d average time: %f micros variance: %f micros\n",ITERATIONS,floats,(mean_value),(variance));
-    float flops= (double)(((double)(floats)/(mean_value)));
+    float flops= (float)(((float)(floats)/(mean_value)));
     printf("average Giga FLOP/s: %f\n",flops);
     printf("Clearing heap...\n");
     vectorDestroy(&vector);

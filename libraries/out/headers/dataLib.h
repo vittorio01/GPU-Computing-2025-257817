@@ -29,14 +29,14 @@ typedef struct SparseMatrix {
 
     int* rowArray;
     int* colArray;
-    double* dataArray;
+    float* dataArray;
 
 } SparseMatrix;
 
 typedef struct Vector {
     int size;
 
-    double* dataArray;
+    float* dataArray;
 
 } Vector;
 

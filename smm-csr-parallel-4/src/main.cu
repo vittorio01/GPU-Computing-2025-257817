@@ -10,7 +10,7 @@
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
-#define WARMUP_CYCLES 2
+#define WARMUP_CYCLES 0
 #define ITERATIONS 1
 
 #define THREADS_NUMBER      256
@@ -18,59 +18,25 @@
 #define SHARED_MEMORY_DIM   49152
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    int threadNumber=(blockIdx.x*blockDim.x)+threadIdx.x;
+    int threadNumber=(blockIdx.x*blockDim.x)*threadIdx.x;
     int threadShift=gridDim.x*blockDim.x;
+    for (int i=threadNumber;i<output->size;i+=threadShift) {
+        output->dataArray[i]=0;
+    }
 
-    extern __shared__ unsigned char shared[];
-    int sharedMemorySize=(SHARED_MEMORY_DIM-(2*sizeof(int)))/sizeof(float);
-    int sharedDataPerThread=sharedMemorySize/THREADS_NUMBER;
-
-    float* sharedData=(float*) shared;
-    int* pendingCount=(int*) (shared+SHARED_MEMORY_DIM-(2*sizeof(int)));
-    int* minColumn=(int*) (shared+SHARED_MEMORY_DIM-sizeof(int));
-    
-    for (int i=threadNumber;i<matrix->rowSize;i+=threadShift) {
+    for (int i=blockIdx.x;i<matrix->rowSize;i+=gridDim.x) {
         int startRow=matrix->rowArray[i];
         int endRow=matrix->rowArray[i+1];
         int elements=endRow-startRow;
-        float acc=0;
-        if (threadIdx.x==0) *pendingCount=THREADS_NUMBER;
-
-        for (int windowPos=0;windowPos<input->size;) {
-
-            //window position enstablishment phase
-            if (threadIdx.x==0) *minColumn=matrix->colArray[startRow];
-            __syncthreads();
-            if (threadIdx.x!=0) atomicMin(minColumn,matrix->colArray[startRow]);
-            __syncthreads();
-            windowPos=*minColumn;
-            
-            //loading phase 
-            for (int j=0;j<sharedDataPerThread;j++) {
-                int sharedIndex=(threadIdx.x*sharedDataPerThread)+j;
-                sharedData[sharedIndex]=input->dataArray[sharedIndex+windowPos];
+        if (blockDim.x>elements) {
+            int colPerThread=elements/blockDim.x;
+            for (int j=(colPerThread*threadIdx.x);j<colPerThread;i++) {            
+                atomicAdd(&output->dataArray[i],matrix->dataArray[startRow+j]*input->dataArray[matrix->colArray[startRow+j]]);
             }
-            __syncthreads();
-            //computing phase
-            
-            while(elements>0) {
-                int mxCol=matrix->colArray[startRow];
-                if (mxCol>=windowPos+sharedMemorySize) break;
-
-                acc+=matrix->dataArray[startRow]*sharedData[mxCol-windowPos];
-                startRow++;
-                elements--;
+        } else {
+            if (threadIdx.x<elements) {
+                atomicAdd(&output->dataArray[i],matrix->dataArray[startRow+threadIdx.x]*input->dataArray[matrix->colArray[startRow+threadIdx.x]]);
             }
-            if (elements==0) {
-                elements=-1;
-                output->dataArray[i]=acc;
-                atomicSub(pendingCount,1);
-            }
-            __syncthreads();
-            if(atomicCAS(pendingCount,0,0)==0) {
-                break;
-            }
-    
         }
     }
 }

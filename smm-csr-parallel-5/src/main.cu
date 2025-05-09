@@ -10,68 +10,54 @@
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
-#define WARMUP_CYCLES 2
-#define ITERATIONS 1
+#define WARMUP_CYCLES 5
+#define ITERATIONS 20
 
 #define THREADS_NUMBER      256
 #define BLOCK_NUMBER        10
-#define SHARED_MEMORY_DIM   49152
+#define SHARED_MEMORY_DIM   4
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    int threadNumber=(blockIdx.x*blockDim.x)+threadIdx.x;
-    int threadShift=gridDim.x*blockDim.x;
+    extern __shared__ int sharedMemory[];
+    int* nextPendingRow=sharedMemory;
 
-    extern __shared__ unsigned char shared[];
-    int sharedMemorySize=(SHARED_MEMORY_DIM-(2*sizeof(int)))/sizeof(float);
-    int sharedDataPerThread=sharedMemorySize/THREADS_NUMBER;
-
-    float* sharedData=(float*) shared;
-    int* pendingCount=(int*) (shared+SHARED_MEMORY_DIM-(2*sizeof(int)));
-    int* minColumn=(int*) (shared+SHARED_MEMORY_DIM-sizeof(int));
-    
-    for (int i=threadNumber;i<matrix->rowSize;i+=threadShift) {
-        int startRow=matrix->rowArray[i];
-        int endRow=matrix->rowArray[i+1];
-        int elements=endRow-startRow;
-        float acc=0;
-        if (threadIdx.x==0) *pendingCount=THREADS_NUMBER;
-
-        for (int windowPos=0;windowPos<input->size;) {
-
-            //window position enstablishment phase
-            if (threadIdx.x==0) *minColumn=matrix->colArray[startRow];
-            __syncthreads();
-            if (threadIdx.x!=0) atomicMin(minColumn,matrix->colArray[startRow]);
-            __syncthreads();
-            windowPos=*minColumn;
-            
-            //loading phase 
-            for (int j=0;j<sharedDataPerThread;j++) {
-                int sharedIndex=(threadIdx.x*sharedDataPerThread)+j;
-                sharedData[sharedIndex]=input->dataArray[sharedIndex+windowPos];
-            }
-            __syncthreads();
-            //computing phase
-            
-            while(elements>0) {
-                int mxCol=matrix->colArray[startRow];
-                if (mxCol>=windowPos+sharedMemorySize) break;
-
-                acc+=matrix->dataArray[startRow]*sharedData[mxCol-windowPos];
-                startRow++;
-                elements--;
-            }
-            if (elements==0) {
-                elements=-1;
-                output->dataArray[i]=acc;
-                atomicSub(pendingCount,1);
-            }
-            __syncthreads();
-            if(atomicCAS(pendingCount,0,0)==0) {
-                break;
-            }
-    
+    int rowToProcess=0;
+    int blockStart;
+    int blockEnd;
+    if (matrix->rowSize<gridDim.x) {
+        if (blockIdx.x<matrix->rowSize) {
+            rowToProcess=1;
+            blockStart=blockIdx.x;
         }
+    } else {
+        int blockSize=matrix->rowSize/gridDim.x;
+        int remainder=matrix->rowSize%gridDim.x;
+    
+        if (blockIdx.x<remainder) {
+            rowToProcess=blockSize+1;
+            blockStart=blockIdx.x*rowToProcess;
+        } else {
+            rowToProcess=blockSize;
+            blockStart=remainder*(blockSize+1)+(blockIdx.x-remainder)*blockSize;
+        }
+    }
+    blockEnd=blockStart+rowToProcess;
+
+    if (threadIdx.x==0) *nextPendingRow=0;
+    __syncthreads();
+
+    int selectedRowIndex;
+    while(true) {
+        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
+        if (selectedRowIndex>=blockEnd) break; 
+
+        int startRow=matrix->rowArray[selectedRowIndex];
+        int endRow=matrix->rowArray[selectedRowIndex+1];
+        int acc = 0;
+        for (int i=startRow;i<endRow;i++) {
+            acc+=matrix->dataArray[i]*input->dataArray[matrix->colArray[i]];
+        }
+        output->dataArray[selectedRowIndex]=acc;
     }
 }
 
@@ -147,20 +133,19 @@ int main(int argc, char** argv) {
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
-        cudaEventRecord(start);
+        if (i>=0) cudaEventRecord(start);
         vmcsr_mul<<<BLOCK_NUMBER,THREADS_NUMBER,SHARED_MEMORY_DIM>>>(&output,&matrix,&vector);
         
-        cudaEventRecord(stop);
+        if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
         if (cudaResult != cudaSuccess) {
             fprintf(stderr, "Error during kernel execution: %s\n", cudaGetErrorString(cudaResult));
             return cudaResult;
         }
-        cudaEventElapsedTime(&times[i], start,stop);
-        printf("iteration %d took %f ms\n",i,times[i]);
-        
-        
-        
+        if (i>=0) {
+            cudaEventElapsedTime(&times[i], start,stop);
+            printf("iteration %d took %f ms\n",i,times[i]);
+        }
     }
     
 

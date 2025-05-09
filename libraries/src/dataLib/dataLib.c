@@ -48,7 +48,7 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
         fclose(filePointer);
         return MEMORY_ALLOCATION_ERROR;
     }
-    cudaResult=cudaMallocManaged((void**)&matrix->dataArray, sizeof(double)*matrix->notNull,cudaMemAttachHost);
+    cudaResult=cudaMallocManaged((void**)&matrix->dataArray, sizeof(float)*matrix->notNull,cudaMemAttachHost);
     if (cudaResult!=cudaSuccess) {
         fclose(filePointer);
         return MEMORY_ALLOCATION_ERROR;
@@ -66,7 +66,7 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
             fclose(filePointer);
             return FILE_TRUNCATED;
         }
-        if (fscanf(filePointer,"%lf",&matrix->dataArray[i])==EOF) {
+        if (fscanf(filePointer,"%f",&matrix->dataArray[i])==EOF) {
             matrixDestroy(matrix);
             fclose(filePointer);
             return FILE_TRUNCATED;
@@ -119,7 +119,7 @@ cudaError_t matrixDestroy(SparseMatrix* matrix) {
 
 cudaError_t vectorCreate(Vector* vector, int size) {
     vector->dataArray=NULL;
-    cudaError_t result=cudaMallocManaged((void**)&vector->dataArray, sizeof(double)*size,cudaMemAttachHost);
+    cudaError_t result=cudaMallocManaged((void**)&vector->dataArray, sizeof(float)*size,cudaMemAttachHost);
     if (result!=cudaSuccess) return result;
     vector->size=size;
 }
@@ -129,7 +129,7 @@ cudaError_t vectorCreateRandom(Vector* vector, int size) {
     if (result!=cudaSuccess) return result;
     srand(time(NULL));
     for (int i=0;i<size;i++) {
-        vector->dataArray[i]=1;//vector->dataArray[i]=(double) rand() / RAND_MAX;
+        vector->dataArray[i]=1;//vector->dataArray[i]=(float) rand() / RAND_MAX;
     }
 }
 cudaError_t vectorDestroy(Vector* vector) {
@@ -140,14 +140,14 @@ cudaError_t vectorDestroy(Vector* vector) {
 }
 
 cudaError_t vectorPrefetch(Vector* vector,int cudaDevice)  {
-    return cudaMemPrefetchAsync((void*)vector->dataArray, vector->size*sizeof(double),cudaDevice,0);
+    return cudaMemPrefetchAsync((void*)vector->dataArray, vector->size*sizeof(float),cudaDevice,0);
 
 }
 cudaError_t matrixPrefetch(SparseMatrix* matrix,int cudaDevice) {
     cudaError_t result;
     result=cudaMemPrefetchAsync(matrix->colArray, (matrix->notNull)*sizeof(int),cudaDevice,0);
     if (result!=cudaSuccess) return result;
-    result=cudaMemPrefetchAsync((void*)matrix->dataArray, (matrix->notNull)*sizeof(double),cudaDevice,0);
+    result=cudaMemPrefetchAsync((void*)matrix->dataArray, (matrix->notNull)*sizeof(float),cudaDevice,0);
     if (result!=cudaSuccess) return result;
     if (matrix->type==CSR) {
         result=cudaMemPrefetchAsync((void*)matrix->rowArray, ((matrix->rowSize)+1)*sizeof(int),cudaDevice,0);
