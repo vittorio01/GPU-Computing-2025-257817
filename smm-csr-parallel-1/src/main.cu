@@ -17,36 +17,59 @@
 #define BLOCK_NUMBER    10
 
 
-
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    int tIdx=blockIdx.x*blockDim.x+threadIdx.x;
-    int row;
-    int endRow;
-    float accumulator;
+    int rowToProcess=0;
+    int blockStart;
+    if (matrix->rowSize<gridDim.x) {
+        if (blockIdx.x<matrix->rowSize) {
+            rowToProcess=1;
+            blockStart=blockIdx.x;
+        }
+    } else {
+        int blockSize=matrix->rowSize/gridDim.x;
+        int remainder=matrix->rowSize%gridDim.x;
     
-    unsigned int rowNumber=(matrix->rowSize);
-    
-    unsigned int threadShift=gridDim.x*blockDim.x;
-    float mtxElement;
-    float arrayElement;
-    
-    for (int i=tIdx;i<rowNumber;i+=threadShift) {
-        row=matrix->rowArray[i];
-        endRow=matrix->rowArray[i+1];
-        accumulator=0;
-        
-        for (int colIndex=row;colIndex<endRow;colIndex++) {
-            
-            mtxElement=matrix->dataArray[colIndex];
-            
-            arrayElement=input->dataArray[matrix->colArray[colIndex]];
-            
-            accumulator+=mtxElement*arrayElement;  
-        } 
-        output->dataArray[i]=accumulator;       
-    }    
-}
+        if (blockIdx.x<remainder) {
+            rowToProcess=blockSize+1;
+            blockStart=blockIdx.x*rowToProcess;
+        } else {
+            rowToProcess=blockSize;
+            blockStart=remainder*(blockSize+1)+(blockIdx.x-remainder)*blockSize;
+        }
+    }
+    if (rowToProcess == 0) return;
 
+    int rowPerThread;
+    int threadStart=blockStart;
+    if (rowToProcess<gridDim.x) {
+        if (threadIdx.x<rowToProcess) {
+            rowPerThread=1;
+            threadStart+=threadIdx.x;
+        }
+    } else {
+        int threadChunkSize=rowToProcess/blockDim.x;
+        int remainder=rowToProcess%blockDim.x;
+    
+        if (threadIdx.x<remainder) {
+            rowPerThread=threadChunkSize+1;
+            threadStart+=threadIdx.x*rowPerThread;
+        } else {
+            rowPerThread=threadChunkSize;
+            threadStart+=remainder*(threadChunkSize+1)+(threadIdx.x-remainder)*threadChunkSize;
+        }
+    }
+    int threadEnd=threadStart+rowPerThread;
+
+    for (int selectedRowIndex=threadStart;selectedRowIndex<threadEnd;selectedRowIndex++) {
+        int startRow=matrix->rowArray[selectedRowIndex];
+        int endRow=matrix->rowArray[selectedRowIndex+1];
+        int acc = 0;
+        for (int i=startRow;i<endRow;i++) {
+            acc+=matrix->dataArray[i]*input->dataArray[matrix->colArray[i]];
+        }
+        output->dataArray[selectedRowIndex]=acc;
+    }
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) {

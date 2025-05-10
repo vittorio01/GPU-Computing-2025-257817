@@ -10,52 +10,55 @@
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
-#define WARMUP_CYCLES 2
-#define ITERATIONS 1
+#define WARMUP_CYCLES 5
+#define ITERATIONS 20
 
-#define THREADS_NUMBER      10 //256
-#define BLOCK_NUMBER        10 //10
-#define SHARED_MEMORY_DIM   49152       
-
+#define THREADS_NUMBER      256
+#define BLOCK_NUMBER        10
+#define SHARED_MEMORY_DIM   4
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    extern __shared__ float shared[];
-    int tIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    extern __shared__ int sharedMemory[];
+    int* nextPendingRow=sharedMemory;
 
-    int dataNumber=SHARED_MEMORY_DIM/(2*sizeof(float));
-    int chunkSize=dataNumber/blockDim.x;
-
-    float* sharedDataArray=shared;
-    int* sharedColArray = (int*)(shared + (dataNumber));
-
-    float* threadDataArray=sharedDataArray+(threadIdx.x*chunkSize);
-    int* threadColArray=sharedColArray+(threadIdx.x*chunkSize);
-
-    unsigned int rowNumber=(matrix->rowSize);
-    unsigned int threadShift=gridDim.x*blockDim.x;
-
-    for (int i=tIdx;i<rowNumber;i+=threadShift) {
-        int startRow=matrix->rowArray[i];
-        int endRow=matrix->rowArray[i+1];
-        int elements=endRow-startRow;
-        float acc=0;
-        //processing in base of the dedicated shared memory chunk size
-        for (int chunkPos=0;chunkPos<elements;chunkPos+=chunkSize) {
-            int chunkElements=min(chunkSize, elements-chunkPos);
-            //loading phase for a chunk of a row 
-            for(int j=0;j<chunkElements;j++) {
-                threadDataArray[j]=matrix->dataArray[startRow+chunkPos+j];
-                threadColArray[j]=matrix->colArray[startRow+chunkPos+j];
-            }
-            //__syncthreads();
-            //computing phase for a chunk of a row
-            for(int j=0;j<chunkElements;j++) {
-                acc+=threadDataArray[j]*input->dataArray[threadColArray[j]];
-            }
-            //__syncthreads();
+    int rowToProcess=0;
+    int blockStart;
+    int blockEnd;
+    if (matrix->rowSize<gridDim.x) {
+        if (blockIdx.x<matrix->rowSize) {
+            rowToProcess=1;
+            blockStart=blockIdx.x;
         }
-        output->dataArray[i]=acc; 
-    }    
+    } else {
+        int blockSize=matrix->rowSize/gridDim.x;
+        int remainder=matrix->rowSize%gridDim.x;
+    
+        if (blockIdx.x<remainder) {
+            rowToProcess=blockSize+1;
+            blockStart=blockIdx.x*rowToProcess;
+        } else {
+            rowToProcess=blockSize;
+            blockStart=remainder*(blockSize+1)+(blockIdx.x-remainder)*blockSize;
+        }
+    }
+    blockEnd=blockStart+rowToProcess;
+
+    if (threadIdx.x==0) *nextPendingRow=0;
+    __syncthreads();
+
+    int selectedRowIndex;
+    while(true) {
+        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
+        if (selectedRowIndex>=blockEnd) break; 
+
+        int startRow=matrix->rowArray[selectedRowIndex];
+        int endRow=matrix->rowArray[selectedRowIndex+1];
+        int acc = 0;
+        for (int i=startRow;i<endRow;i++) {
+            acc+=matrix->dataArray[i]*input->dataArray[matrix->colArray[i]];
+        }
+        output->dataArray[selectedRowIndex]=acc;
+    }
 }
 
 
@@ -130,25 +133,25 @@ int main(int argc, char** argv) {
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
-        cudaEventRecord(start);
-        vmcsr_mul<<<BLOCK_NUMBER,THREADS_NUMBER,SHARED_MEMORY_DIM >>>(&output,&matrix,&vector);
+        if (i>=0) cudaEventRecord(start);
+        vmcsr_mul<<<BLOCK_NUMBER,THREADS_NUMBER,SHARED_MEMORY_DIM>>>(&output,&matrix,&vector);
         
-        cudaEventRecord(stop);
+        if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
         if (cudaResult != cudaSuccess) {
             fprintf(stderr, "Error during kernel execution: %s\n", cudaGetErrorString(cudaResult));
             return cudaResult;
         }
-        cudaEventElapsedTime(&times[i], start,stop);
-        printf("iteration %d took %f ms\n",i,times[i]);
-        
-        
-        
+        if (i>=0) {
+            cudaEventElapsedTime(&times[i], start,stop);
+            printf("iteration %d took %f ms\n",i,times[i]);
+        }
     }
     
+
     float mean_value = math_geometric_mean(ITERATIONS,times);
     float variance = math_variance(ITERATIONS,times,mean_value);
-    int floats=matrix.notNull;
+    int floats=2*matrix.notNull;
     printf("Executed %d iterations, floating point operations: %d average time: %f ms variance: %f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
     float flops= (float)((float)floats)/(mean_value*pow(10,-3));
     printf("average GFLOP/s: %f\n",flops*pow(10,-9));
