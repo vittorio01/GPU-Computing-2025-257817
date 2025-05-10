@@ -9,8 +9,8 @@
 
 #define MISSING_MATRIX_INPUT_ERROR 10
 
-#define WARMUP_CYCLES 2
-#define ITERATIONS 10
+#define WARMUP_CYCLES 5
+#define ITERATIONS 20
 
 
 void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* vector) {
@@ -72,11 +72,13 @@ int main(int argc, char** argv) {
     vectorCreate(&output,matrix.rowSize);
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         gettimeofday(&tv, NULL);
-        times[i]=tv.tv_usec;
-        printf("iteration %d took %f\n",i,times[i]);
+        if (i>=0) times[i]=tv.tv_usec;
         vmcsr_mul(&output,&matrix,&vector);
         gettimeofday(&tv, NULL);
-        times[i] = (tv.tv_usec - times[i]); 
+        if (i>=0) {
+            times[i] = (tv.tv_usec - times[i])*pow(10,-3);
+            printf("iteration %d took %f ms\n",i,times[i]);
+        }
     }
     double mean_value = math_geometric_mean(ITERATIONS,times);
     double variance = math_variance(ITERATIONS,times,mean_value);

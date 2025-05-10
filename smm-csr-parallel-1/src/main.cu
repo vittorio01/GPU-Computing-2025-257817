@@ -72,6 +72,17 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     }
 }
 
+void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
+    output->size=matrix->rowSize;  
+    for (int i=0;i<(matrix->rowSize);i++) {
+        int acc=0;
+        for (int j=(matrix->rowArray[i]);j<(matrix->rowArray[i+1]);j++) {
+            acc+=matrix->dataArray[j]*vector->dataArray[matrix->colArray[j]];
+        }
+        output->dataArray[i]=acc;
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         printf("Missing input matrix. Closing program...\n");
@@ -166,11 +177,30 @@ int main(int argc, char** argv) {
     double flops= ((double)floats)/(mean_value*pow(10,-3));
     printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
 
+    printf("checking results...\n");
+    Vector outputSequential;
+    vectorCreate(&outputSequential,matrix.rowSize);
+    vmcsr_mul_sequential(&outputSequential,&matrix,&vector);
+    float maxEpsilon=0;
+    int elementEpsilon=0;
+    for (int i=0;i<output.size;i++) {
+        float epsilon=output.dataArray[i]-outputSequential.dataArray[i];
+        if (epsilon>maxEpsilon) {
+            maxEpsilon=epsilon;
+            elementEpsilon=i;
+        }
+    }
+    if (maxEpsilon>0) {
+        printf("Detected mismatch between results on position %d (epsilon=%f)\n",elementEpsilon,maxEpsilon);
+    } else {
+        printf("The algorithm works good!\n");
+    }
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     vectorDestroy(&vector);
     vectorDestroy(&output);
+    vectorDestroy(&outputSequential);
     matrixDestroy(&matrix);
     
     return 0;

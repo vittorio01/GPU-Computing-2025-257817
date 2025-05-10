@@ -13,8 +13,8 @@
 #define WARMUP_CYCLES 5
 #define ITERATIONS 20
 
-#define THREADS_NUMBER  1024
-#define BLOCK_NUMBER    65535
+#define THREADS_NUMBER  2560 //1024
+#define BLOCK_NUMBER    10 //65535
 #define SHARED_MEMORY_DIM   49152
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
@@ -38,6 +38,18 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
                 atomicAdd(&output->dataArray[i],matrix->dataArray[startRow+threadIdx.x]*input->dataArray[matrix->colArray[startRow+threadIdx.x]]);
             }
         }
+    }
+}
+
+
+void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
+    output->size=matrix->rowSize;  
+    for (int i=0;i<(matrix->rowSize);i++) {
+        int acc=0;
+        for (int j=(matrix->rowArray[i]);j<(matrix->rowArray[i+1]);j++) {
+            acc+=matrix->dataArray[j]*vector->dataArray[matrix->colArray[j]];
+        }
+        output->dataArray[i]=acc;
     }
 }
 
@@ -135,6 +147,25 @@ int main(int argc, char** argv) {
     printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
     double flops= ((double)floats)/(mean_value*pow(10,-3));
     printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
+
+    printf("checking results...\n");
+    Vector outputSequential;
+    vectorCreate(&outputSequential,matrix.rowSize);
+    vmcsr_mul_sequential(&outputSequential,&matrix,&vector);
+    float maxEpsilon=0;
+    int elementEpsilon=0;
+    for (int i=0;i<output.size;i++) {
+        float epsilon=output.dataArray[i]-outputSequential.dataArray[i];
+        if (epsilon>maxEpsilon) {
+            maxEpsilon=epsilon;
+            elementEpsilon=i;
+        }
+    }
+    if (maxEpsilon>0) {
+        printf("Detected mismatch between results on position %d (epsilon=%f)\n",elementEpsilon,maxEpsilon);
+    } else {
+        printf("The algorithm works good!\n");
+    }
 
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);

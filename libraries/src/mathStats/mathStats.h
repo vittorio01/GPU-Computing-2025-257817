@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <math.h>
+#include <stdio.h>
 
 double math_geometric_mean(int n, float* numbers);
 double math_variance(int n, float* numbers,float mean);
