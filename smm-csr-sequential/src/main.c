@@ -13,16 +13,15 @@
 #define ITERATIONS 10
 
 
-void vmcsr_mul(Vector* output, int* floats, SparseMatrix* matrix,Vector* vector) {
+void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* vector) {
     output->size=matrix->rowSize;  
-
-    for (int i=0;i<output->size;i++) output->dataArray[i]=0;
     for (int i=0;i<(matrix->rowSize);i++) {
+        int acc=0;
         for (int j=(matrix->rowArray[i]);j<(matrix->rowArray[i+1]);j++) {
-            output->dataArray[i]+=matrix->dataArray[j]*vector->dataArray[matrix->colArray[j]];
+            acc+=matrix->dataArray[j]*vector->dataArray[matrix->colArray[j]];
         }
+        output->dataArray[i]=acc;
     }
-    *floats=matrix->notNull+output->size;
 }
 
 int main(int argc, char** argv) {
@@ -71,22 +70,24 @@ int main(int argc, char** argv) {
     float times[ITERATIONS];
     Vector output;
     vectorCreate(&output,matrix.rowSize);
-    int floats=0;
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         gettimeofday(&tv, NULL);
         times[i]=tv.tv_usec;
         printf("iteration %d took %f\n",i,times[i]);
-        vmcsr_mul(&output,&floats,&matrix,&vector);
+        vmcsr_mul(&output,&matrix,&vector);
         gettimeofday(&tv, NULL);
         times[i] = (tv.tv_usec - times[i]); 
     }
-    float mean_value = math_geometric_mean(ITERATIONS,times);
-    float variance = math_variance(ITERATIONS,times,mean_value);
-    printf("Executed %d iterations, floating point operations: %d average time: %f micros variance: %f micros\n",ITERATIONS,floats,(mean_value),(variance));
-    float flops= (float)(((float)(floats)/(mean_value)));
-    printf("average Giga FLOP/s: %f\n",flops);
+    double mean_value = math_geometric_mean(ITERATIONS,times);
+    double variance = math_variance(ITERATIONS,times,mean_value);
+    int floats=2*matrix.notNull;
+    printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
+    double flops= ((double)floats)/(mean_value*pow(10,-3));
+    printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
+
     printf("Clearing heap...\n");
     vectorDestroy(&vector);
+    vectorDestroy(&output);
     matrixDestroy(&matrix);
     
     

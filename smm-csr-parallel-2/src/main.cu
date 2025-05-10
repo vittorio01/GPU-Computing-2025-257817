@@ -13,8 +13,8 @@
 #define WARMUP_CYCLES 5
 #define ITERATIONS 20
 
-#define THREADS_NUMBER      256
-#define BLOCK_NUMBER        10
+#define THREADS_NUMBER  1024
+#define BLOCK_NUMBER    65535
 #define SHARED_MEMORY_DIM   4
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
@@ -149,12 +149,12 @@ int main(int argc, char** argv) {
     }
     
 
-    float mean_value = math_geometric_mean(ITERATIONS,times);
-    float variance = math_variance(ITERATIONS,times,mean_value);
+    double mean_value = math_geometric_mean(ITERATIONS,times);
+    double variance = math_variance(ITERATIONS,times,mean_value);
     int floats=2*matrix.notNull;
-    printf("Executed %d iterations, floating point operations: %d average time: %f ms variance: %f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
-    float flops= (float)((float)floats)/(mean_value*pow(10,-3));
-    printf("average GFLOP/s: %f\n",flops*pow(10,-9));
+    printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
+    double flops= ((double)floats)/(mean_value*pow(10,-3));
+    printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
 
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);
