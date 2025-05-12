@@ -4,4 +4,13 @@ libraries/out
 smm-csr-parallel-1/bin
 smm-csr-parallel-2/bin
 smm-csr-parallel-3/bin 
+smm-csr-parallel-4/bin 
 smm-csr-sequential/bin 
+
+paper/main.bbl
+paper/main.blg
+paper/main.fdb_latexmk
+paper/main.fls
+paper/main.log
+paper/main.synctex.gz
+paper/main.aux
