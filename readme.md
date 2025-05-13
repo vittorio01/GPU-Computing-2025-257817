@@ -12,6 +12,7 @@ This document outlines the basic structure of a typical project's folders and fi
      - `src/`: source folder for libraries.
        - `dataLib/`: contains the implementation of Vector and Matrix data structures and utilities.
        - `mathStats/`: contains the implementation of statistical function for the expected value and variance.
+         
    **paper source code**
    - `paper/`: The folder that contains the source code in latex for the paper.
 
