@@ -1,4 +1,4 @@
-.vscode
+.vscode/settings.json
 cuda-test/bin
 libraries/out
 smm-csr-parallel-1/bin

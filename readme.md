@@ -4,20 +4,35 @@ This document outlines the basic structure of a typical project's folders and fi
 
 ## Contents
 
-1. **Root Directory**
-   - `src/`: Contains all the source code for the project.
-     - `app/`: Application-specific source code.
-       - `main.py`: Main Python file to run the application.
-     - `config/`: Configuration files.
-       - `settings.json`: Holds configuration settings.
-   - `data/`: Data files and databases.
-     - `db.sqlite3`: A SQLite database file.
-   - `utils/`: Utility functions and scripts.
-     - `plot.py`: Python script for plotting data.
-   - `requirements/`: Directory for installing project dependencies.
-     - `pip.txt`: List of packages to install.
+1. **Matrix directory**
+   - `data/`: Contains all the matrices in the COO format from sparse.tamu.edu used for testing.
+   **Libraries**
+   - `libraries/`: Contains headers and implementation of used data structures.
+    - `out/`: folder used as output for compiled libraries.
+    - `src/`: source folder for libraries.
+     - `dataLib/`: contains the implementation of Vector and Matrix data structures and utilities.
+     - `mathStats/`: contains the implementation of statistical function for the expected value and variance.
+   **paper source code**
+   - `paper/`: The folder that contains the source code in latex for the paper.
 
-2. **Special Folders**
+   **algorithms**
+   - `smm-csr-sequential/`: The implementation of the sequential algorithm for SpVm.
+   - `smm-csr-parallel-1/`: The implementation of the first GPU algorithm for SpVm.
+   - `smm-csr-parallel-2/`: The implementation of the second GPU algorithm for SpVm.
+   - `smm-csr-parallel-3/`: The implementation of the third GPU algorithm for SpVm.
+   - `smm-csr-parallel-4/`: The implementation of the fourth GPU algorithm for SpVm.
+
+   **other files**
+   - `flake.lock and flake.nix`: two files used for setting up the CUDA environment on NixOS. 
+   - `readme.md`: This readme :) .
+
+2. **Implementation folders**
+   The folders `smm-csr-sequential` and `smm-csr-parallel-*` contains the various solution for the SpVm. These folders have the same structure:
+   - `bin/`: the output folder that contains the compiled executable.
+   - `out/`: the folder that contains the results stderr and stdout of the program when launched
+   - `src/`: the folder that contains the source code   
+   - `makefile`: used for compiling the binaries. 
+   - `sbatch.sh`: the file that can be used for launching the program in a SLURM controlled server.  
 
    **a. Documentation**
    - `docs/`: Documentation files
