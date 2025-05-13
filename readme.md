@@ -8,10 +8,10 @@ This document outlines the basic structure of a typical project's folders and fi
    - `data/`: Contains all the matrices in the COO format from sparse.tamu.edu used for testing.
    **Libraries**
    - `libraries/`: Contains headers and implementation of used data structures.
-    - `out/`: folder used as output for compiled libraries.
-    - `src/`: source folder for libraries.
-     - `dataLib/`: contains the implementation of Vector and Matrix data structures and utilities.
-     - `mathStats/`: contains the implementation of statistical function for the expected value and variance.
+     - `out/`: folder used as output for compiled libraries.
+     - `src/`: source folder for libraries.
+       - `dataLib/`: contains the implementation of Vector and Matrix data structures and utilities.
+       - `mathStats/`: contains the implementation of statistical function for the expected value and variance.
    **paper source code**
    - `paper/`: The folder that contains the source code in latex for the paper.
 
@@ -34,24 +34,6 @@ This document outlines the basic structure of a typical project's folders and fi
    - `makefile`: used for compiling the binaries. 
    - `sbatch.sh`: the file that can be used for launching the program in a SLURM controlled server.  
 
-   **a. Documentation**
-   - `docs/`: Documentation files
-     - `readme.md`: Main project documentation
-
-   **b. Testing**
-   - `tests/`: Test code and related files
-     - `test_main.py`: Example test script
-
-   **c. Build**
-   - `build/`: Output from build process
-     - `Makefile`: Build configuration file
-
-3. **Files**
-
-   - `LICENSE`: Project license
-   - `README.md`: Main project documentation
-   - `requirements.txt`: List of required packages
-   - `setup.py`: Python package setup script
 
 ## Conclusion
 
