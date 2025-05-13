@@ -8,4 +8,4 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 module load CUDA/12.5
-./bin/smm-csr-parallel-1 ../data/$1
+./bin/smm-csr-parallel-1 $1 $2 $3
