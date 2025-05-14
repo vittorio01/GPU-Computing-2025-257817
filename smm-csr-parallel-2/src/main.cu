@@ -121,6 +121,10 @@ int main(int argc, char** argv) {
         printf("Error during matrix reading phase: data array not valid\n");
         return DATA_ARRAY_NOT_VALID;
 
+        case MEMORY_ALLOCATION_ERROR:
+        printf("Error during matrix reading phase: error during memory allocation\n");
+        return MEMORY_ALLOCATION_ERROR;
+
         case FILE_TRUNCATED:
         printf("Error during matrix reading phase: cannot open file\n");
         return FILE_TRUNCATED;

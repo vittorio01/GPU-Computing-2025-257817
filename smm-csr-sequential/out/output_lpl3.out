@@ -1,0 +1,26 @@
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 0.208000 ms
+iteration 1 took 0.206000 ms
+iteration 2 took 0.204000 ms
+iteration 3 took 0.205000 ms
+iteration 4 took 0.205000 ms
+iteration 5 took 0.209000 ms
+iteration 6 took 0.205000 ms
+iteration 7 took 0.204000 ms
+iteration 8 took 0.205000 ms
+iteration 9 took 0.205000 ms
+iteration 10 took 0.212000 ms
+iteration 11 took 0.205000 ms
+iteration 12 took 0.204000 ms
+iteration 13 took 0.204000 ms
+iteration 14 took 0.204000 ms
+iteration 15 took 0.210000 ms
+iteration 16 took 0.205000 ms
+iteration 17 took 0.205000 ms
+iteration 18 took 0.205000 ms
+iteration 19 took 0.205000 ms
+Executed 20 iterations, floating point operations: 100525 average time: 0.205739 ms variance: 0.000005 ms
+average GFLOP/s: 0.977210
+Clearing heap...

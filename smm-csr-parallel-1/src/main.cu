@@ -111,6 +111,10 @@ int main(int argc, char** argv) {
         printf("Error during matrix reading phase: column array not valid\n");
         return COL_ARRAY_NOT_VALID;
 
+        case MEMORY_ALLOCATION_ERROR:
+        printf("Error during matrix reading phase: error during memory allocation\n");
+        return MEMORY_ALLOCATION_ERROR;
+
         case DATA_ARRAY_NOT_VALID:
         printf("Error during matrix reading phase: data array not valid\n");
         return DATA_ARRAY_NOT_VALID;
