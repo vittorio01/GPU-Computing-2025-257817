@@ -1,5 +1,9 @@
 #include "dataLib.h"
 
+cudaError_t matrixCreate(SparseMatrix** matrix) {
+    return cudaMallocManaged((void**)matrix, sizeof(SparseMatrix),cudaMemAttachHost);
+}
+
 int matrixOpen(char* filePath, SparseMatrix* matrix) {
     FILE *filePointer=fopen(filePath,"r");
     if (filePointer==NULL) {
@@ -98,6 +102,7 @@ cudaError_t matrixConvertCSR(SparseMatrix* matrix) {
     result=cudaFree(matrix->rowArray);
     if (result!=cudaSuccess) return result;
     matrix->rowArray=newRow;
+    return cudaSuccess;
 }
 
 cudaError_t matrixDestroy(SparseMatrix* matrix) {
@@ -114,29 +119,36 @@ cudaError_t matrixDestroy(SparseMatrix* matrix) {
     matrix->colSize=0;
     matrix->rowSize=0;
     matrix->notNull=0;
+    result=cudaFree(matrix);
     return cudaSuccess;
 }
 
-cudaError_t vectorCreate(Vector* vector, int size) {
-    vector->dataArray=NULL;
-    cudaError_t result=cudaMallocManaged((void**)&vector->dataArray, sizeof(float)*size,cudaMemAttachHost);
+cudaError_t vectorCreate(Vector** vector, int size) {
+    cudaError_t result=cudaMallocManaged((void**)vector, sizeof(Vector),cudaMemAttachHost);
     if (result!=cudaSuccess) return result;
-    vector->size=size;
+    (*vector)->dataArray=NULL;
+    result=cudaMallocManaged((void**)&(*vector)->dataArray, sizeof(float)*size,cudaMemAttachHost);
+    if (result!=cudaSuccess) return result;
+    (*vector)->size=size;
+    return cudaSuccess;
 }
 
-cudaError_t vectorCreateRandom(Vector* vector, int size) {
+cudaError_t vectorCreateRandom(Vector** vector, int size) {
     cudaError_t result=vectorCreate(vector,size);
     if (result!=cudaSuccess) return result;
     srand(time(NULL));
     for (int i=0;i<size;i++) {
-        vector->dataArray[i]=1;//vector->dataArray[i]=(float) rand() / RAND_MAX;
+        (*vector)->dataArray[i]=1;//vector->dataArray[i]=(float) rand() / RAND_MAX;
     }
+    return cudaSuccess;
 }
 cudaError_t vectorDestroy(Vector* vector) {
     cudaError_t result=cudaFree(vector->dataArray);
     if (result!=cudaSuccess) return result;
     vector->size=0;
     vector->dataArray=NULL;
+    result=cudaFree(vector);
+    return cudaSuccess;
 }
 
 cudaError_t vectorPrefetch(Vector* vector,int cudaDevice)  {

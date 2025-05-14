@@ -62,6 +62,12 @@ typedef struct Vector {
 
 
 //------ Functions ------
+/*matrixOpen is a function that creates a SparseMatrix structure:
+- matrix -> an empty SparseMatrix structure to initialize
+
+  returns -> the result of the operation
+*/
+cudaError_t matrixCreate(SparseMatrix** matrix);
 
 /*matrixOpen is a function that loads data from a file to a SparseMatrix structure:
 - filePath -> the String that contains the name of the file to read 
@@ -91,7 +97,7 @@ cudaError_t matrixConvertCSR(SparseMatrix* matrix);
 
   returns -> the result of the operation (cudaError_t)
 */
-cudaError_t vectorCreate(Vector* vector, int size);
+cudaError_t vectorCreate(Vector** vector, int size);
 
 /*vectorCreateRandom is a function that assign values to a Vector structure and initializes it with random values:
 - vector -> the vector to initialize
@@ -99,7 +105,7 @@ cudaError_t vectorCreate(Vector* vector, int size);
 
   returns -> the result of the operation (cudaError_t)
 */
-cudaError_t vectorCreateRandom(Vector* vector, int size);
+cudaError_t vectorCreateRandom(Vector** vector, int size);
 
 /*vectorDestroy is a function that unload the array in a Vector structure:
 - vector -> SparseMatrix structure to clear.
