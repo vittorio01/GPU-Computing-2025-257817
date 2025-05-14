@@ -1,8 +1,8 @@
 # Sparse Matrix and Vector multiplication algorithms
-This repository contains the implementatin of various solution for a SpVm algorithm for CSR Sparse Matrix format on a Nvidia GPU on the global memory using only CUDA cores.
+This repository contains the implementatin of various solution for a SpMV multiplication algorithm for CSR Sparse Matrix format on a Nvidia GPU on the global memory using only CUDA cores.
 The main goal of this project is to find the best algorithm that is less memory bounded and performs better in terms of parallelization of the workload in difference situations. 
 
-The results of this experiments are documented in this dedicated paper located in `paper/` folder.
+The results of this experiments and the description of the algorithms are documented in this dedicated paper located in `paper/` folder. The source code contains also small clarifications on the main steps of the programs. 
 
 ## Folder structure
 
@@ -23,18 +23,18 @@ The results of this experiments are documented in this dedicated paper located i
        - `IEEEtran.cls and references.bib`: Latex files used for the IEEE template. 
 
    **Algorithms**
-   - `smm-csr-sequential/`: The implementation of the sequential algorithm for SpVm.
-   - `smm-csr-parallel-1/`: The implementation of the first GPU algorithm for SpVm.
-   - `smm-csr-parallel-2/`: The implementation of the second GPU algorithm for SpVm.
-   - `smm-csr-parallel-3/`: The implementation of the third GPU algorithm for SpVm.
-   - `smm-csr-parallel-4/`: The implementation of the fourth GPU algorithm for SpVm.
+   - `smm-csr-sequential/`: The implementation of the sequential algorithm for SpMV multiplication.
+   - `smm-csr-parallel-1/`: The implementation of the first GPU algorithm for SpMV multiplication.
+   - `smm-csr-parallel-2/`: The implementation of the second GPU algorithm for SpMV multiplication.
+   - `smm-csr-parallel-3/`: The implementation of the third GPU algorithm for SpMV multiplication.
+   - `smm-csr-parallel-4/`: The implementation of the fourth GPU algorithm for SpMV multiplication.
 
    **Other files**
    - `flake.lock and flake.nix`: two files used for setting up the CUDA environment on NixOS. 
    - `readme.md`: This readme :) .
 
 
-The folders `smm-csr-sequential` and `smm-csr-parallel-*` contains the various solution for the SpVm. These folders have the same structure:
+The folders `smm-csr-sequential` and `smm-csr-parallel-*` contains the various solution for the SpMV multiplication. These folders have the same structure:
    - `bin/`: the output folder that contains the compiled executable.
    - `out/`: the folder that contains the results stderr and stdout of the program when launched
    - `src/`: the folder that contains the source code   

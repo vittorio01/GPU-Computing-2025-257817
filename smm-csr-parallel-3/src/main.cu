@@ -16,34 +16,57 @@
 #define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
 
+/*
+Implementation of the third algorithm for the parallel SpMV multiplication for CSR matrices. 
+
+The row vector divided for the number of block used for the multiplication (if the division is not perfect the last block obtains less rows to scan).
+Then each block initializes its relative subspace of the output vector to 0.
+
+This time each row is assigned to a specific block in which all threads performs the multiplication of one or more coefficients and accumulates the result in the output 
+vector using the atomicAdd function. 
+
+If in a row the number of coefficients is less that the number of threads per block, the exceeding threads remain unused. 
+
+*/
+
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {    
+
+    //row vector division in block subspaces
     int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
     int blockStart = blockIdx.x * rowsPerBlock;
     int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
     if (rowsPerBlock == 0) return;
 
+    //initialization of the output vector
     for (int i=blockStart+threadIdx.x;i<blockEnd;i+=blockDim.x) {
         output->dataArray[i]=0;
     }
     __syncthreads();
 
+    //SpMV multiplication
     for (int selectedRowIndex=blockStart;selectedRowIndex<blockEnd;selectedRowIndex++) {
 
         int startRow=matrix->rowArray[selectedRowIndex];
         int endRow=matrix->rowArray[selectedRowIndex+1];
         int elements=endRow-startRow;
+
         if (blockDim.x<elements) {
+            //if the number of elements to multiply is greather than the number of threads, each thread will compute one or more elements 
             float acc=0;
             int colPerThread = (elements + blockDim.x - 1) / blockDim.x;
             int threadStart = threadIdx.x * colPerThread;
             int threadEnd = min(threadStart + colPerThread, elements);
             threadStart+=startRow;
             threadEnd+=startRow;
+
+            //computation and accumulation of elements
             for (int j=threadStart;j<threadEnd;j++) {            
                 acc+=matrix->dataArray[j]*input->dataArray[matrix->colArray[j]];
             }
             atomicAdd(&output->dataArray[selectedRowIndex],acc);
         } else {
+
+            //if the number of elements to multiply is less than the number of threads, each tread can have one or zero elements to compute.
             if (threadIdx.x<elements) {
                 atomicAdd(&output->dataArray[selectedRowIndex],matrix->dataArray[startRow+threadIdx.x]*input->dataArray[matrix->colArray[startRow+threadIdx.x]]);
             }
@@ -51,7 +74,7 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     }
 }
 
-
+//SpMV multiplication algorithm used for checking the results. 
 void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     output->size=matrix->rowSize;  
     for (int i=0;i<(matrix->rowSize);i++) {
@@ -65,10 +88,13 @@ void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
 
 
 int main(int argc, char** argv) {
+     //Data loading phase: the programs checks if there is a matrix, opens it using the datalib custom library and creates a vector for the multiplication
     if (argc < 2) {
         printf("Missing input matrix. Closing program...\n");
         return MISSING_MATRIX_INPUT_ERROR;
     }
+
+    //verify the arguments for the blocks and threads allocation  
     int blocks=DEFAULT_BLOCKS_NUMBER;
     int threads=DEFAULT_THREADS_NUMBER;
 
@@ -89,6 +115,8 @@ int main(int argc, char** argv) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
+
+     //Creating matrix structure and opening the file
     printf("Launching algorithm with %d blocks and %d threads\n",blocks,threads);
     SparseMatrix matrix;
     int result=matrixOpen(argv[1],&matrix);
@@ -120,13 +148,14 @@ int main(int argc, char** argv) {
     printf("Converting into CSR ... \n");
     matrixConvertCSR(&matrix);
     
-    
+    //Creating input and output vector
     printf("generating input and output vectors for the moltiplication... \n");
     Vector vector;
     vectorCreateRandom(&vector, matrix.colSize);
     Vector output;
     vectorCreate(&output,matrix.rowSize);
 
+     //preloading all structures in the global memory 
     printf("copying data in the CUDA memory... \n");
     cudaError_t cudaResult;
     int currentDevice;
@@ -148,7 +177,7 @@ int main(int argc, char** argv) {
     }
     printf("performing matrix to vector multiplication...\n");
     
-    
+    //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -170,7 +199,7 @@ int main(int argc, char** argv) {
             printf("iteration %d took %f ms\n",i,times[i]);
         }
     }
-    
+    //Performing the results of the benchmarks for GFLOP/s and effective bandwidth
     double mean_value = math_geometric_mean(ITERATIONS,times);
     double variance = math_variance(ITERATIONS,times,mean_value);
     int floats=2*matrix.notNull;
@@ -181,6 +210,7 @@ int main(int argc, char** argv) {
     double bandwidth=(((12*matrix.notNull)+(16*matrix.rowSize))/mean_value)*pow(10,-6);
     printf("Effective bandwidth: %2f GB/s\n",bandwidth);
 
+    //Data check phase: the parallel algorithm results are compared with the sequential ones.
     printf("checking results...\n");
     Vector outputSequential;
     vectorCreate(&outputSequential,matrix.rowSize);
@@ -203,6 +233,7 @@ int main(int argc, char** argv) {
         printf("The algorithm works good :)\n");
     }
 
+    //Cleaning phase.
     printf("Operation done. Cleaning heap and VRAM...\n");
     cudaEventDestroy(start);
     cudaEventDestroy(stop);

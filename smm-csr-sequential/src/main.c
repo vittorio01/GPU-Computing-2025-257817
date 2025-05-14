@@ -1,3 +1,6 @@
+/*Implementation of the sequential SpMV multiplication */
+
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,11 +16,23 @@
 #define ITERATIONS 20
 
 
+/*
+Implementation of the sequential SpMV moltiplication for CSR matrices. 
+A for cycle scans the row vector and decodes the starting pointer and the ending pointer to column and data arrays. 
+
+Then a second for cycle iterates on the subspace from startRow to endRow to multiply all terms in a matrix row with the correspondent vector element 
+and accumulates the result into the variable acc. 
+
+The result is then saved in the output vector.
+*/
+
 void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* vector) {
     output->size=matrix->rowSize;  
     for (int i=0;i<(matrix->rowSize);i++) {
+        int startRow=matrix->rowArray[i];
+        int endRow=matrix->rowArray[i+1];
         int acc=0;
-        for (int j=(matrix->rowArray[i]);j<(matrix->rowArray[i+1]);j++) {
+        for (int j=startRow;j<endRow;j++) {
             acc+=matrix->dataArray[j]*vector->dataArray[matrix->colArray[j]];
         }
         output->dataArray[i]=acc;
@@ -25,10 +40,13 @@ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* vector) {
 }
 
 int main(int argc, char** argv) {
+    //Data loading phase: the programs checks if there is a matrix, opens it using the datalib custom library and creates a vector for the multiplication
     if (argc < 2) {
         printf("Missing input matrix. Closing program...\n");
         return MISSING_MATRIX_INPUT_ERROR;
     }
+
+    //Creating matrix structure and opening the file
     SparseMatrix matrix;
     int result=matrixOpen(argv[1],&matrix);
     switch (result) {
@@ -59,17 +77,18 @@ int main(int argc, char** argv) {
     
     matrixConvertCSR(&matrix);
     
+    //Creating input and output vectors
     printf("generating a vector of float for the moltiplication... \n");
     Vector vector;
     vectorCreate(&vector, matrix.colSize);
-
+    Vector output;
+    vectorCreate(&output,matrix.rowSize);
     
     printf("performing sparse matrix CSR to vector multiplication... \n");
 
+    //Benchmarking phase: Using the function gettimeofday to measure the time used by the algorithm
     struct timeval tv;
     float times[ITERATIONS];
-    Vector output;
-    vectorCreate(&output,matrix.rowSize);
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         gettimeofday(&tv, NULL);
         if (i>=0) times[i]=tv.tv_usec;
@@ -80,6 +99,8 @@ int main(int argc, char** argv) {
             printf("iteration %d took %f ms\n",i,times[i]);
         }
     }
+
+    //Performing the average GFLOP/S
     double mean_value = math_geometric_mean(ITERATIONS,times);
     double variance = math_variance(ITERATIONS,times,mean_value);
     int floats=2*matrix.notNull;
@@ -87,6 +108,7 @@ int main(int argc, char** argv) {
     double flops= ((double)floats)/(mean_value*pow(10,-3));
     printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
 
+    //Clearing structures
     printf("Clearing heap...\n");
     vectorDestroy(&vector);
     vectorDestroy(&output);
