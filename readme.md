@@ -40,7 +40,7 @@ The folders `smm-csr-sequential` and `smm-csr-parallel-*` contains the various s
    - `src/`: the folder that contains the source code   
    - `makefile`: used for compiling the binaries. 
    - `sbatch.sh`: the file that can be used for launching the program in a SLURM controlled server.  
-
+   - `sbatch_all.sh`: the file that can be used for launching the program for all test matrices in a SLURM controlled server.  
 
 ## Build requirements
 To compile the algorithm is necessary Linux machine with a preinstalled version of the CUDA SDK >= 12.5 (during the development I used my Nvidia RTX 4050 Laptop with the 12.8 version but all tests are performed on 12.5 version) and other C/C++ standard tools:
@@ -80,6 +80,11 @@ In the same folder there is also a file `sbatch.sh` for launching the executable
 sbatch sbatch.sh ../data/lab/text/matrix.mtx -b 10 -t 256
 ```
 The listing of the STDOUT and STDERR will be placed in the `out/` folder with the following format: `output_"job number".out` and `error_"job_number".err`.
+
+The file `sbatch_all.sh` launches the program for all test matrices included in the folder `data/`:
+```
+sbatch sbatch_all.sh -b 10 -t 256
+```
 
 ## Credits ##
 

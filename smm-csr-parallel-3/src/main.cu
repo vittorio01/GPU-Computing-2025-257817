@@ -35,6 +35,8 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
     int blockStart = blockIdx.x * rowsPerBlock;
     int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    rowsPerBlock=blockEnd-blockStart;
+    
     if (rowsPerBlock == 0) return;
 
     //initialization of the output vector
@@ -113,12 +115,11 @@ int main(int argc, char** argv) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
-    printf("Launching algorithm with %d blocks and %d threads\n",blocks,threads);
+    printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
 
     //Creating matrix structure and opening the file
     SparseMatrix* matrix=NULL;
     matrixCreate(&matrix);
-    printf("marker");
 
     int result=matrixOpen(argv[1],matrix);
     switch (result) {
@@ -258,7 +259,7 @@ int main(int argc, char** argv) {
     }
 
     //Cleaning phase.
-    printf("Operation done. Cleaning heap and VRAM...\n");
+    printf("Operation done. Cleaning heap and VRAM...\n\n");
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     vectorDestroy(vector);

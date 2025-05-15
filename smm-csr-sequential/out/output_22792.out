@@ -1,0 +1,205 @@
+Thu May 15 16:41:34 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.144.03             Driver Version: 550.144.03     CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A30                     On  |   00000000:17:00.0 Off |                    0 |
+| N/A   31C    P0             28W /  165W |       1MiB /  24576MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+ 
+---------- Processing matrices  ----------
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 1.359000 ms
+iteration 1 took 1.378000 ms
+iteration 2 took 1.369000 ms
+iteration 3 took 1.386000 ms
+iteration 4 took 1.342000 ms
+iteration 5 took 1.380000 ms
+iteration 6 took 1.353000 ms
+iteration 7 took 1.393000 ms
+iteration 8 took 1.384000 ms
+iteration 9 took 1.371000 ms
+iteration 10 took 1.356000 ms
+iteration 11 took 1.377000 ms
+iteration 12 took 1.336000 ms
+iteration 13 took 1.395000 ms
+iteration 14 took 1.354000 ms
+iteration 15 took 1.385000 ms
+iteration 16 took 1.332000 ms
+iteration 17 took 1.363000 ms
+iteration 18 took 1.376000 ms
+iteration 19 took 1.387000 ms
+Executed 20 iterations, floating point operations: 1158159 average time: 1.368678 ms variance: 0.000349 ms
+average GFLOP/s: 1.692376
+Clearing heap...
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 17.961000 ms
+iteration 1 took 17.937000 ms
+iteration 2 took 17.943001 ms
+iteration 3 took 17.934999 ms
+iteration 4 took 17.941999 ms
+iteration 5 took 17.934000 ms
+iteration 6 took 17.947001 ms
+iteration 7 took 17.938000 ms
+iteration 8 took 17.920000 ms
+iteration 9 took 17.931999 ms
+iteration 10 took 17.931999 ms
+iteration 11 took 17.952000 ms
+iteration 12 took 17.993999 ms
+iteration 13 took 18.167999 ms
+iteration 14 took 17.938999 ms
+iteration 15 took 17.927999 ms
+iteration 16 took 17.917000 ms
+iteration 17 took 17.937000 ms
+iteration 18 took 17.938000 ms
+iteration 19 took 17.931000 ms
+Executed 20 iterations, floating point operations: 3599932 average time: 17.951175 ms variance: 0.002862 ms
+average GFLOP/s: 0.401080
+Clearing heap...
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 5.760000 ms
+iteration 1 took 5.764000 ms
+iteration 2 took 5.771000 ms
+iteration 3 took 5.762000 ms
+iteration 4 took 5.761000 ms
+iteration 5 took 5.761000 ms
+iteration 6 took 5.762000 ms
+iteration 7 took 5.762000 ms
+iteration 8 took 5.756000 ms
+iteration 9 took 5.760000 ms
+iteration 10 took 5.762000 ms
+iteration 11 took 5.763000 ms
+iteration 12 took 5.757000 ms
+iteration 13 took 5.762000 ms
+iteration 14 took 5.761000 ms
+iteration 15 took 5.767000 ms
+iteration 16 took 5.757000 ms
+iteration 17 took 5.759000 ms
+iteration 18 took 5.759000 ms
+iteration 19 took 5.768000 ms
+Executed 20 iterations, floating point operations: 1096948 average time: 5.761699 ms variance: 0.000014 ms
+average GFLOP/s: 0.380772
+Clearing heap...
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 7.518000 ms
+iteration 1 took 7.522000 ms
+iteration 2 took 7.533000 ms
+iteration 3 took 7.530000 ms
+iteration 4 took 7.516000 ms
+iteration 5 took 7.520000 ms
+iteration 6 took 7.504000 ms
+iteration 7 took 7.529000 ms
+iteration 8 took 7.553000 ms
+iteration 9 took 7.521000 ms
+iteration 10 took 7.521000 ms
+iteration 11 took 7.507000 ms
+iteration 12 took 7.511000 ms
+iteration 13 took 7.503000 ms
+iteration 14 took 7.519000 ms
+iteration 15 took 7.519000 ms
+iteration 16 took 7.525000 ms
+iteration 17 took 7.510000 ms
+iteration 18 took 7.511000 ms
+iteration 19 took 7.517000 ms
+Executed 20 iterations, floating point operations: 1216334 average time: 7.519442 ms variance: 0.000130 ms
+average GFLOP/s: 0.323517
+Clearing heap...
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 9.325000 ms
+iteration 1 took 9.330000 ms
+iteration 2 took 9.314000 ms
+iteration 3 took 9.312000 ms
+iteration 4 took 9.333000 ms
+iteration 5 took 9.321000 ms
+iteration 6 took 9.309000 ms
+iteration 7 took 9.325000 ms
+iteration 8 took 9.335000 ms
+iteration 9 took 9.308000 ms
+iteration 10 took 9.304000 ms
+iteration 11 took 9.301000 ms
+iteration 12 took 9.322000 ms
+iteration 13 took 9.317000 ms
+iteration 14 took 9.373000 ms
+iteration 15 took 9.346000 ms
+iteration 16 took 9.361000 ms
+iteration 17 took 9.343000 ms
+iteration 18 took 9.363000 ms
+iteration 19 took 9.351000 ms
+Executed 20 iterations, floating point operations: 1208908 average time: 9.329628 ms variance: 0.000431 ms
+average GFLOP/s: 0.259155
+Clearing heap...
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 4.023000 ms
+iteration 1 took 4.024000 ms
+iteration 2 took 4.023000 ms
+iteration 3 took 4.022000 ms
+iteration 4 took 4.030000 ms
+iteration 5 took 4.025000 ms
+iteration 6 took 4.023000 ms
+iteration 7 took 4.022000 ms
+iteration 8 took 4.021000 ms
+iteration 9 took 4.021000 ms
+iteration 10 took 4.022000 ms
+iteration 11 took 4.020000 ms
+iteration 12 took 4.025000 ms
+iteration 13 took 4.021000 ms
+iteration 14 took 4.021000 ms
+iteration 15 took 4.023000 ms
+iteration 16 took 4.023000 ms
+iteration 17 took 4.022000 ms
+iteration 18 took 4.022000 ms
+iteration 19 took 4.022000 ms
+Executed 20 iterations, floating point operations: 758028 average time: 4.022749 ms variance: 0.000005 ms
+average GFLOP/s: 0.376871
+Clearing heap...
+Matrix read successfully :)
+generating a vector of float for the moltiplication... 
+performing sparse matrix CSR to vector multiplication... 
+iteration 0 took 5.809000 ms
+iteration 1 took 5.818000 ms
+iteration 2 took 5.827000 ms
+iteration 3 took 5.817000 ms
+iteration 4 took 5.814000 ms
+iteration 5 took 5.814000 ms
+iteration 6 took 5.808000 ms
+iteration 7 took 5.812000 ms
+iteration 8 took 5.823000 ms
+iteration 9 took 5.813000 ms
+iteration 10 took 5.816000 ms
+iteration 11 took 5.807000 ms
+iteration 12 took 5.810000 ms
+iteration 13 took 5.820000 ms
+iteration 14 took 5.829000 ms
+iteration 15 took 5.815000 ms
+iteration 16 took 5.815000 ms
+iteration 17 took 5.806000 ms
+iteration 18 took 5.814000 ms
+iteration 19 took 5.816000 ms
+Executed 20 iterations, floating point operations: 1224224 average time: 5.815147 ms variance: 0.000038 ms
+average GFLOP/s: 0.421047
+Clearing heap...
+ 

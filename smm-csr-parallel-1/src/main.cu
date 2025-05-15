@@ -31,19 +31,19 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
     int blockStart = blockIdx.x * rowsPerBlock;
     int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
-    
+    rowsPerBlock=blockEnd-blockStart;
     if (rowsPerBlock == 0) return;     
 
     //row vector supspace division for all threads
     int rowsPerThread = (rowsPerBlock + blockDim.x - 1) / blockDim.x;
     int threadStart = threadIdx.x * rowsPerThread;
     int threadEnd = min(threadStart + rowsPerThread, rowsPerBlock);
+    
    
     threadStart+=blockStart;
     threadEnd+=blockStart;
 
     for (int selectedRowIndex=threadStart;selectedRowIndex<threadEnd;selectedRowIndex++) {
-        
         int startRow=matrix->rowArray[selectedRowIndex];
         int endRow=matrix->rowArray[selectedRowIndex+1];
         float acc = 0;
@@ -53,7 +53,7 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
             acc+=matrix->dataArray[i]*input->dataArray[matrix->colArray[i]];
         }
         output->dataArray[selectedRowIndex]=acc;
-        printf("thread %d %d on row %d\n",threadIdx.x,blockIdx.x,selectedRowIndex);
+       
     }
 }
 
@@ -96,12 +96,11 @@ int main(int argc, char** argv) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
-    printf("Launching algorithm with %d blocks and %d threads\n",blocks,threads);
+    printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
 
     //Creating matrix structure and opening the file
     SparseMatrix* matrix=NULL;
     matrixCreate(&matrix);
-    printf("marker");
 
     int result=matrixOpen(argv[1],matrix);
     switch (result) {
@@ -241,7 +240,7 @@ int main(int argc, char** argv) {
     }
 
     //Cleaning phase.
-    printf("Operation done. Cleaning heap and VRAM...\n");
+    printf("Operation done. Cleaning heap and VRAM...\n\n");
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     vectorDestroy(vector);

@@ -43,13 +43,14 @@ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* vector) {
 int main(int argc, char** argv) {
     //Data loading phase: the programs checks if there is a matrix, opens it using the datalib custom library and creates a vector for the multiplication
     if (argc < 2) {
-        printf("Missing input matrix. Closing program...\n");
+        printf("Missing input matrix-> Closing program...\n");
         return MISSING_MATRIX_INPUT_ERROR;
     }
 
     //Creating matrix structure and opening the file
-    SparseMatrix matrix;
-    int result=matrixOpen(argv[1],&matrix);
+    SparseMatrix* matrix;
+    matrixCreate(&matrix);
+    int result=matrixOpen(argv[1],matrix);
     switch (result) {
         case FILE_OPEN_ERROR:
         printf("Error during matrix reading phase: cannot open file\n");
@@ -80,15 +81,15 @@ int main(int argc, char** argv) {
         break;
     }
     
-    matrixConvertCSR(&matrix);
+    matrixConvertCSR(matrix);
     
     
     //Creating input and output vectors
     printf("generating a vector of float for the moltiplication... \n");
-    Vector vector;
-    vectorCreate(&vector, matrix.colSize);
-    Vector output;
-    vectorCreate(&output,matrix.rowSize);
+    Vector* vector;
+    vectorCreate(&vector, matrix->colSize);
+    Vector* output;
+    vectorCreate(&output,matrix->rowSize);
     
     printf("performing sparse matrix CSR to vector multiplication... \n");
 
@@ -98,10 +99,11 @@ int main(int argc, char** argv) {
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         gettimeofday(&tv, NULL);
         if (i>=0) times[i]=tv.tv_usec;
-        vmcsr_mul(&output,&matrix,&vector);
+        vmcsr_mul(output,matrix,vector);
         gettimeofday(&tv, NULL);
         if (i>=0) {
             times[i] = (tv.tv_usec - times[i])*pow(10,-3);
+            if (times[i]<=0) times[i]=times[i-1];
             printf("iteration %d took %f ms\n",i,times[i]);
         }
     }
@@ -109,16 +111,16 @@ int main(int argc, char** argv) {
     //Performing the average GFLOP/S
     double mean_value = math_geometric_mean(ITERATIONS,times);
     double variance = math_variance(ITERATIONS,times,mean_value);
-    int floats=2*matrix.notNull;
-    printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,matrix.notNull,(mean_value),(variance));
+    int floats=2*matrix->notNull;
+    printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,matrix->notNull,(mean_value),(variance));
     double flops= ((double)floats)/(mean_value*pow(10,-3));
     printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
 
     //Clearing structures
     printf("Clearing heap...\n");
-    vectorDestroy(&vector);
-    vectorDestroy(&output);
-    matrixDestroy(&matrix);
+    vectorDestroy(vector);
+    vectorDestroy(output);
+    matrixDestroy(matrix);
     
     
     return 0;
