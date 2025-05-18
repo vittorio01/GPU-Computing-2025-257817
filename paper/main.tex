@@ -27,13 +27,8 @@
 \maketitle
 
 \begin{abstract}
-The algorithm of sparse matrix-dense vector multiplication (SpMV) is an optimized version of the traditional matrix-vector multiplication, 
-designed to handle cases where the matrix is organized in a low density of non-zero entries. 
-This technique is particularly useful in scenarios involving very large matrices with a small amount of not null terms because it allows to reduce the used space for 
-storing that large structures and, at the same time, optimizes memory accesses and reduces overhead during computational steps. 
-
-This deliverable discusses about the implementation of different parallel implementation of the SpVM algorithm between CSR matrices and a general vector,
-with a final benchmark, which evaluates all solution toghether in order to identify the algorithm with the best behaviour. 
+This deliverable discusses about the implementation of different parallel solutions of the SpVM algorithm between CSR matrices and a general vector,
+with a final benchmark that compares all solution toghether. 
 
 \end{abstract}
 
@@ -42,81 +37,60 @@ Sparse Matrix, SpMV, CUDA, Parallelization, Storage Format
 \end{IEEEkeywords}
 
 \section{Introduction}
-The main objective, when developing algorithms that elaborates large quantities of data, is to obtain a solution that:
-\begin{enumerate}
-    \item Minimizes the execution time. 
-    \item Minimizes the memory accesses during the computation of results.
-    \item Maintain as much as possible the performance with different inputs. 
-\end{enumerate}
+The algorithm of sparse matrix-dense vector multiplication (SpMV) is an optimized version of the traditional matrix-vector multiplication
+designed to handle cases where the matrix is organized in a low density of non-zero entries. 
+This technique is particularly useful in scenarios that involves very large sparse matrices because it allows to reduce the used space for 
+storing that large structures and, at the same time, optimizes memory access patterns during computational steps. 
+
 Because the SpMV multiplication should handle matrices with millions or billions of not null elements, to obtain good results is necessary to use parallelization techniques 
 on GPUs rather than sequential solution for CPUs. 
 
 \section{Problem Statement}
 In the SpVM multiplication we consider a matrix coded in a sparse format (in this case the CSR format) and an input vector that has the same size of its columns number. 
 
-Each elements of the resulting vector is computed by summing toghether the dot products of each row of the matrix with the input vector.
-\begin{algorithm}[h!]
-    \caption{Algorithm for a standard matrix-vector product}
-    \begin{algorithmic}[1]
-    \Procedure{Function}{$matrix$, $vector$, $output$}
-    \For{$row$ in $matrix.rows$}
-    \For{$element$ in $row$}
-    \State $output[row]$
-    \State $= input[element]*output[element]$
-    \EndFor
-    \EndFor
-    \EndProcedure
-    \end{algorithmic}
-\end{algorithm}
+Each elements of the resulting vector is computed by performing the dot products of each not null elements of the matrix with the input vector and accumulating them in the corresponding row position.
 At this point the main objectives are:
 \begin{enumerate}
     \item Create a first sequential algorithm that performs the same operation on a sparse CSR matrix.
-    \item Parallelize in different ways the first CPU implementation with CUDA and compare them in terms of performances and resurces utilization. 
+    \item Parallelize the first CPU implementation with CUDA and compare them in terms of performances and resurces utilization. 
 \end{enumerate}
 
 \subsection{Storage Format}
 The CSR for sparse matrices is a storage format that involves three different arrays to represent the information: 
 \begin{itemize}
     \item The data array, that contains all not null terms of the original matrix.
-    \item The column array, that for each element in the data vector specifies its column coordinate. For example, the element $i$ in the data array has its respective column coordinate stored in $colArray[i]$
-    \item The row array, which contains the start and the end pointers for each row to the data and column arrays. these two pair of pointers indicates which data are contained in that specific row. 
+    \item The column array, where for each element in the data vector specifies its column coordinate.
+    \item The row array, which contains the start and the end pointers for each row to the data and column arrays. these two pair of pointers indicates which nut null terms in the data array are contained in that specific row. 
 \end{itemize}
-At the end, the size of the data and column arrays depends on the number of not null elements and the size of the row array depends on the number of the rows in the original matrix. 
+The size of the data and column arrays depends on the number of not null elements and the size of the row array depends on the number of the rows in the original matrix. 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\linewidth]{images/CSR.png}
     \caption{Data organization in CSR structure}
     \label{fig:csr-format}
 \end{figure}
-For example, all elements in contained in a row $i$ are enumerated in the data array starting from the position stored in the row array $rowArray[i]$ to the position stored in the next cell $rowArray[i+1]$.
 
 \subsection{Parallelization}
-To improve the overall performance, the parallel implementation of the first algorithm are designed to be executed on Nvidia GPUs and programmed in CUDA.
-The CUDA language model is designed to run on different concurrent threads called CUDA cores, where each thread represents a computational unit located in the GPU. 
+To improve the overall performance, the parallel implementations of the first algorithm are designed to be executed on Nvidia GPUs and programmed in CUDA.
+The CUDA language model permits to run a kernel on different concurrent threads called CUDA cores, where each thread represents a computational unit located in the GPU. 
 
-In general, the workload can be splitted in different ways for a certain number of CUDA cores. Different organizations can provide more or less performance in terms of the execution time and 
+In general, the workload can be splitted in different ways for a certain number of CUDA cores and different organizations can provide more or less performance in terms of the execution time and 
 troughput. 
 
 \section{State of the Art}
-There already are multiple c++ libraries that performs CSR SpMV multiplications:
+There already are multiple c++ libraries that performs CSR SpMV multiplications like:
 \begin{itemize}
     \item cuSPARSE\cite{cuSPARSE}, the official library supported by Nvidia that can perform multiplication between matrices and vectors in different formats with CUDA. 
-    \item MAGMA-sparse\cite{magma}, a linear algebra library that offers solution for multicore/multithreads algorithms that runs on CPUs and GPUs. 
     \item Ginkgo\cite{ginkgo}, like MAGMA offers high-performance solution for multicore linear algebra algorithms for different platforms.
 \end{itemize}
-All listed libraries includes also shared memory optimizations, pipelining and other techniques to improve the performance of the algorithm. 
-
-The proposed algorithms in this derivable includes solutions that designed to performs only in the GPU's global memory. 
-
-
 \section{Methodology and Contributions}\label{sec:methodology}
 \subsection{Sequential algorithm}
-There are not so much solutions to implement a sequential SpVM multiplication. The most intuitive and performant way is to scan the row vector and, using the 
-stores pointers, perform the product and accumulate over a variable all the elements contained in each row.
+The most intuitive and efficient way to perform a sequential SpMV multiplication is to scan the row vector and, using the 
+stored pointers, perform the product of the corredpondent not null elements and accumulate the result in a local variable.
 
 \begin{algorithm}[h!]
 \caption{Sequential version for the SpVM algorithm}
-\algorithmicrequire~The input matrix structure $matrix$ that contains all arrays and sizes, the input vector $input$ structure, the number of not null elements $notNull$), the input vector structure (that contains the data array $dataArray$) and the output vector $output$ structure.
+\algorithmicrequire~Two vector structures $input$ and $output$ and a CSR matrix structure $matrix$.
 \begin{algorithmic}[1]
 \Procedure{vmcsrMul}{$output$, $matrix$, $input$}
 \For{$i$ in $matrix.rowSize$}
@@ -134,12 +108,15 @@ stores pointers, perform the product and accumulate over a variable all the elem
 \end{algorithmic}
 \label{alg:sequential}
 \end{algorithm}
-The algorithm \ref{alg:sequential} scans and decodes each pair of start and end pointes for the data array and the column array of the input matrix. 
-Using these two values a second loop first decode the column coordinate of each element in the specific row and then computes the product between the corresponding matrix and vector elements and accumulates the result in a value $acc$. 
-After a row is processed by the second loop, the accumulated value is then stored in the second vector.
-
-The memory access pattern of this solution permits coalescent accesses in all three arrays of the sparse matrix. The only aspect that limits the performance of the algorithm is that the accesses that gathers the input row elements depends on the values stored in the column array and they cannot be optimized without introducing overhead.
-input array should be readed,
+The algorithm \ref{alg:sequential}:
+\begin{enumerate}
+    \item Scans the row array and decodes each pair of start and end pointes.
+    \item Using a second loop performs the product of each not null element with their correpondent elements in the input vector and accumulates the results in the variable $acc$.
+    \item Stores the accumulated value in the output vector.
+\end{enumerate}
+The memory access pattern of this solution permits coalescent accesses in all three arrays of the sparse matrix. 
+The only aspect that limits the performance of the algorithm is the access pattern for gathering the input vector elements for the multiplication
+because it depends on the column coordinates stored in the column array of the matrix. 
 
 \subsection{First parallel implementation}
 A first parallel implementation of the algorithm \ref{alg:sequential} divides the workload between threads such a way that each thread processes one or more entire rows
@@ -186,15 +163,17 @@ The algorithm \ref{alg:parallel1} is the simplest implementation and has good pe
 
 
 \subsection{Second parallel implementation}
-One problem of the algorithm \ref{alg:parallel1} is that if there are threads that have much more more workload to perform, the computational time 
-might be affected negatively. This is the case for matrices which have consecutive rows that contains much more not null elements compared to the others.
+One problem of the algorithm \ref{alg:parallel1} is that if there are threads that have much more more workload to perform respect others, the computational time 
+might be affected negatively. 
+
+This is the case for matrices which have consecutive rows that contains much more not null elements compared to the others.
 
 A solution that may mitigate this problem is to use a dynamic assignment of the rows to threads that are in the same block:
 \begin{enumerate}
     \item The row array is splitted in equal subsection for different blocks using again the ceiling division. 
-    \item For each block a variable in the shared memory $pendingRow$ corresponds to the next row that is waiting for the assignment. 
+    \item For each block a variable in the shared memory $pendingRow$ is initialized and used to contain the next row number that is waiting for the assignment. 
     \item Each thread uses the function $atomicAdd(pendingRow,1)$ to increment the value of $pendingRow$ and, at the same time, read its content
-    and computes the corresponding row until they reach the end of their subsection. 
+    \item Using the value obtained each thread computes the corresponding row and repeats step 3 and 4 until the block reach the end of its subsection. 
 \end{enumerate}
 
 \begin{algorithm}[h!]
@@ -224,12 +203,13 @@ A solution that may mitigate this problem is to use a dynamic assignment of the 
 \label{alg:parallel2}
 \end{algorithm}
 
-The dynamic assignment for threads in the same block implemented in the algorithm \ref{alg:parallel2} tries to mitigate the unbalanced workload introduced in some rows. 
+This dynamic assignment for threads in the same block implemented in the algorithm \ref{alg:parallel2} tries to mitigate the unbalanced workload introduced in some rows. 
 In facts, if some thread spend too much time when computing a single row, other available threads may perform also rows that in the algorithm \ref{alg:parallel1} should be reserved for others.  
-Two limitation introduced with this system are:
+
+Two possible limitation in terms of performance introduced with this system are that:
 \begin{itemize}
-    \item There is concurrency for the value $pendingRow$ that may limit the performance. 
-    \item There is a large probability that some threads do not elaborate rows that are coalescent in the matrix arrays. 
+    \item Now there is concurrency for the value $pendingRow$ that may limit the performance. 
+    \item Threads may elaborate rows that are not orgainzed in a coalescent way in the data and column arrays. 
 \end{itemize}
 
 \subsection{Third parallel implementation}
@@ -237,6 +217,7 @@ Another tentative to distribute the workload contained in the single rows is to 
 single blocks instead of threads:
 \begin{enumerate}
     \item The row array is splitted for different blocks as usual. 
+    \item Each block initializes at 0 their corresponding part in the output vector. 
     \item For each row all threads does some multiplication (or not) of a certain number of elements and accumulates the result in the output vector using the function $atomicAdd()$. 
 \end{enumerate}
 
@@ -246,6 +227,7 @@ single blocks instead of threads:
 \begin{algorithmic}[1]
 \Procedure{vmcsrMul}{$output$, $matrix$, $input$}
 \State $blockStart,blockEnd$ \Comment{Ceiling division}
+\State \text{\dots}\Comment{output vector initialization phase}
 \For{$row$ in ${blockStart,\dots,blockEnd}$}
 \State $startRow=matrix.rowArray[row]$
 \State $endRow=matrix.rowArray[row+1]$
@@ -255,8 +237,7 @@ single blocks instead of threads:
 \State $atomicAdd($
 \State $output.dataArray[row],$
 \State $matrix.dataArray[threadIdx.x]*$
-\State $input.dataArray[col]$
-\State $)$
+\State $input.dataArray[col])$
 \Else 
 \State $threadStart,$
 \State $threadEnd$ \Comment {Ceiling division on row}
@@ -267,8 +248,7 @@ single blocks instead of threads:
 \State $input.dataArray[col]$
 \EndFor
 \State $atomicAdd($
-\State $output.dataArray[row],acc$
-\State $)$
+\State $output.dataArray[row],acc)$
 \EndIf
 \EndFor
 \EndProcedure
@@ -276,7 +256,9 @@ single blocks instead of threads:
 \label{alg:parallel3}
 \end{algorithm}
 
-The algorithm \ref{alg:parallel3} distributes the workload of a row on blocks of threads instead single threads but, without using shared memory optimization, this creates more overhead because:
+The orgnization of algorithm \ref{alg:parallel3} distributes the workload of a row on blocks of threads instead single threads without using shared memory optimization. 
+
+This situation may create more overhead because:
 \begin{itemize}
     \item If the block size is large the function $atomicAdd()$ creates a barrier that limits too much the performance because it must guarantee atomic accumulation on the output vector. 
     \item The first threads in a block are overused for all rows but the last threads are used only if the number of rows are large enough to require them. 
@@ -284,12 +266,7 @@ The algorithm \ref{alg:parallel3} distributes the workload of a row on blocks of
 
 \section{System Description and Experimental Set-up}
 \subsection{Dataset description}
-A dataset composed by 6 matrices is used for testing and benchmark all four algorithms. These matrices containes a number of not null elements between 1 and 1,5 million of not null elements.
-These matrices have different organization of the elements and dispersion that challenges the algorithms in different ways:
-\begin{itemize}
-    \item Linux\_call\_graph represents one of the worst cases because it has a large amount of not null elements that are distribuited on all original matrix.
-    \item Nemeth24 represents one of the better cases because it has a low amount of elements that are concentrated on the diagonal.
-\end{itemize}
+A dataset composed by 6 matrices is used for testing and benchmark all four algorithms. These matrices containes a number of not null elements between 1 and 1,5 million of not null elements and they have different organization of the elements and dispersion that challenges the algorithms in different ways:
 The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suitesparse}, a website that contains sample matrices which can be used for benchmarking algorithms. 
 
 \begin{table}[h]
@@ -318,7 +295,7 @@ The system used for the execution of the benchmarks is uses CUDA 12.3.2, GCC 11.
 
 \begin{table}[h]
     \centering
-    \begin{adjustbox}{width=\columnwidth}
+    \begin{adjustbox}{width=0.8\columnwidth}
     \begin{tabular}{lll}
     \toprule
     \textbf{Characteristic} & \textbf{Value} & \textbf{Device}\\
@@ -352,22 +329,76 @@ effBW (GB/s)=\frac{readedBytes+writtenBytes}{executionTime(ms)}*10^{-6}
 \end{equation}
 
 \begin{equation}
-GFLOPS/s= \frac{floatingPointOp}{executionTime(ms)}*10^{-6}
+GFLOPS/s= \frac{2*notNull}{executionTime(ms)}*10^{-6}
 \end{equation}
+For all algorithm the number of byte transferred is equal to $(12*notNull)+(12*rowSize)$ for the first two algorithms and 
+$(12*notNull)+(16*rowSize)$ for the third one.
 
-\section{Experimental Results}
-Present and discuss results. Include plots and tables when required (like Figure \ref{fig:enter-label}). Do not simply describe the figures; criticise the achieved results by underlining how they confirm/differ from the expected outcomes described in Section \ref{sec:methodology}.
-
+Note that the effective bandwidth is calculated without considering the caching process during the execution. That may cause an overestimation of bytes that are actually transferred from or to the global memory. 
+\section{Experimental Benchmarks}
+The following tables shows the values of GFLOPs/s (\ref{tab:GFLOPS}) and effective bandwidth (\ref{tab:BW}) obtained from benchmarking on 256 blocks of 512 using float values. 
+The figure \ref{fig:flops-graph} gives also a visualization of table \ref{tab:GFLOPS}.
+\begin{table}[h]
+    \centering
+    \begin{adjustbox}{width=0.8\columnwidth}
+    \begin{tabular}{lllll}
+    \toprule
+    \textbf{Matrix} & \textbf{Parallel 1} & \textbf{Parallel 2} & \textbf{Parallel 3} & \textbf{Sequential} \\
+    \midrule
+    dbir2 \cite{dbir2} & \textbf{152,93} & 142,78 & 34,8 & 1,69 \\
+    ex11 \cite{ex11} & 71,44 & \textbf{71,74} & 21,02 & 0,38 \\
+    language \cite{language} & 31 & \textbf{82,4} & 1,91 & 0,32\\
+    Linux\_call\_graph \cite{linuxcallgraph} & 0,85 & 1,72 & \textbf{2,51} & 0,25 \\ 
+    nemeth24 \cite{nemeth24} & 43,4 & \textbf{50} & 16,81 & 0,37 \\
+    twotone \cite{twotone} & 44,42 & \textbf{51,84} & 4,7 & 0,42 \\
+    \bottomrule
+    \end{tabular}
+    \end{adjustbox}
+    \vspace{1em}
+    \caption{GFLOPs/s comparison between parallel and sequential implementations}
+    \label{tab:GFLOPS}
+\end{table}
+\begin{table}[h]
+    \centering
+    \begin{adjustbox}{width=0.79\columnwidth}
+    \begin{tabular}{lllll}
+    \toprule
+    \textbf{Matrix} & \textbf{Parallel 1} & \textbf{Parallel 2} & \textbf{Parallel 3} \\
+    \midrule
+    dbir2 \cite{dbir2} & \textbf{932,56} & 870,66 & 212,49 \\
+    ex11 \cite{ex11} & 435,15 & \textbf{437} & 128,03  \\
+    language \cite{language} & 250,37 & \textbf{656,65} & 15,27 \\
+    Linux\_call\_graph \cite{linuxcallgraph}& 6,52 & 13,11 & \textbf{19,12} \\ 
+    nemeth24 \cite{nemeth24} & 263,8 & \textbf{305,51} & 102,18  \\
+    twotone \cite{twotone}& 292,8 & \textbf{241,75} & 31,03  \\
+    \bottomrule
+    \end{tabular}
+    \end{adjustbox}
+    \vspace{1em}
+    \caption{Bandwidth (GB/s) comparison between parallel implementations}
+    \label{tab:BW}
+\end{table}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\linewidth]{SampleImage.png}
-    \caption{Caption}
-    \label{fig:enter-label}
+    \includegraphics[width=1\linewidth]{images/GFLOP_s.png}
+    \caption{Performance offerences between the four algorithms}
+    \label{fig:flops-graph}
 \end{figure}
 
-\section{Conclusions}
-[max 200 words]\\
-Summarize findings and future work \dots
+\section{Results and conclusion}
+The results indicates that:
+\begin{itemize}
+    \item The best situation is when the not null elements in the matrix are concentrated on the diagonal.
+    \item If the number of not null elements per row is almost uniform for each row in the matrix, the first and the second parallel algorithms give similar results. 
+    \item The second parallel algorithm behaves better in different situations than the others implementations thanks to its load distribution system.
+    \item The third parallel algorithm is more performant that the others only if the number of not null elements per row is very large and the dispersion of the matrix is high.
+\end{itemize}
+Also the block size affects the performances of the algorithms. In facts:
+\begin{itemize}
+    \item In the first implementation the block size does not affect much the performances because the static allocation of workload. 
+    \item In the second implementation a lower block size may reduce the concurrency on the assignment system of the rows. 
+    \item In the third implementation a block size that is much lower that the average number of not null elements per row is more convenient because reduces significantly the concurrency introducted when accumulating the result on the output vector. 
+\end{itemize}
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 

@@ -231,7 +231,7 @@ int main(int argc, char** argv) {
     printf("Executed %d iterations, floating point operations: %d average time: %2f ms variance: %2f ms\n",ITERATIONS,floats,(mean_value),(variance));
     double flops= ((double)floats)/(mean_value*pow(10,-3));
     printf("average GFLOP/s: %2f\n",flops*pow(10,-9));
-    double bandwidth=(((12*matrix->notNull)+(12*matrix->rowSize))/(mean_value))*pow(10,-6);
+    double bandwidth=(((12*matrix->notNull)+(16*matrix->rowSize))/(mean_value))*pow(10,-6);
     printf("Effective bandwidth: %2f GB/s\n",bandwidth);
     
 
