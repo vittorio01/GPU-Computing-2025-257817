@@ -23,6 +23,7 @@
             cudaPkgs.cuda_nvcc
             cudaPkgs.cuda_gdb
             cudaPkgs.cuda_cudart
+            cudaPkgs.nsight_compute
             gcc
             gnumake
             valgrind
