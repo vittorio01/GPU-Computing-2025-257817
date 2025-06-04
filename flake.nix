@@ -34,6 +34,8 @@
             export PATH=$CUDA_PATH/bin:$PATH
             export LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH
             #export LD_LIBRARY_PATH=$CUDA_PATH/lib:$LD_LIBRARY_PATH
+            export HOME=$PWD 
+            chmod a+rwx $HOME
           '';
         };
       });
