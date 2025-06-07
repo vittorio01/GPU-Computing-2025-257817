@@ -15,7 +15,8 @@
 
 #define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
-#define SHARED_MEMORY_DIM   4
+#define SHARED_MEMORY_DIM   49152
+#define RO_CACHE_DIM        65536
 
 #define ROW_BATCH_SIZE      8
 
@@ -56,35 +57,51 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     
     if (rowsPerBlock == 0) return;
 
-    //Next pending row value initialized to 0
-    if (threadIdx.x==0) *nextPendingRow=0;
-    __syncthreads();
-    unsigned int selectedRowIndex;
-    if (laneId==0) {
-        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-    }
-    selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+    unsigned int sharedPos=0;
+    while(sharedPos<matrix->colSize) {
+        __syncthreads();   
+        if (threadIdx.x==0) *nextPendingRow=0;
 
-    while(selectedRowIndex<blockEnd) {
-        int startRow=matrix->rowArray[selectedRowIndex];
-        int endRow=matrix->rowArray[selectedRowIndex+1];
-        int rowSize=endRow-startRow;
-        float acc = 0;
-
-        unsigned int elementsPerLane = (rowSize + warpSize -1) / warpSize;
-        unsigned int laneStart = laneId * elementsPerLane;
-        unsigned laneEnd = min(laneStart + elementsPerLane, rowSize)+startRow;
-        laneStart+=startRow;
-        for (unsigned int i=laneStart;i<laneEnd;i++) {
-            acc+=matrix->dataArray[i]*__ldg(&cachedInput[matrix->colArray[i]]);
-        }
-        acc=reduceSum(acc);
-        
+        __syncthreads();
+        //execution phase
+        unsigned int selectedRowIndex;
         if (laneId==0) {
-            output->dataArray[selectedRowIndex]=acc;
             selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
         }
         selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+        while(selectedRowIndex<blockEnd) {
+            int startRow=matrix->rowArray[selectedRowIndex];
+            int endRow=matrix->rowArray[selectedRowIndex+1];
+            int rowSize=endRow-startRow;
+            float acc = 0;
+
+            unsigned int elementsPerLane = (rowSize + warpSize -1) / warpSize;
+            unsigned int laneStart = laneId * elementsPerLane + startRow;
+            unsigned int laneEnd = min(laneStart + elementsPerLane, endRow);
+            
+            //add ballot sync with a mask
+            for (unsigned int i=laneStart;i<laneEnd;i++) {
+                unsigned int inputCol=matrix->colArray[i];
+                int offset = inputCol - sharedPos;
+                if (offset < RO_CACHE_DIM && offset>=0) acc += matrix->dataArray[i] * __ldg(&cachedInput[inputCol]);
+            }
+            acc=reduceSum(acc);
+            
+            if (laneId==0) {
+                if (sharedPos==0) {
+                    output->dataArray[selectedRowIndex]=acc;
+                } else {
+                    output->dataArray[selectedRowIndex]+=acc;
+                }
+                
+                selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
+            }
+            selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+        }
+
+        //step phase
+        sharedPos+=RO_CACHE_DIM;
+            
     }
 }
 
