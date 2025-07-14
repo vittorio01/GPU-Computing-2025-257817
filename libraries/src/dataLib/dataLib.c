@@ -27,13 +27,13 @@ int matrixOpen(char* filePath, SparseMatrix* matrix) {
         fileBuffer=fgetc(filePointer);
     }
     fseek(filePointer, -1, SEEK_CUR);
-    if (fscanf(filePointer,"%d",&matrix->rowSize)==EOF) {
-        fclose(filePointer);
-        return ROW_ARRAY_NOT_VALID;
-    }
     if (fscanf(filePointer,"%d",&matrix->colSize)==EOF) {
         fclose(filePointer);
         return COL_ARRAY_NOT_VALID;
+    }
+    if (fscanf(filePointer,"%d",&matrix->rowSize)==EOF) {
+        fclose(filePointer);
+        return ROW_ARRAY_NOT_VALID;
     }
     if (fscanf(filePointer,"%d",&matrix->notNull)==EOF || (matrix->rowSize*matrix->colSize)<matrix->notNull) {
         fclose(filePointer);

@@ -15,9 +15,8 @@
 
 #define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
-#define SHARED_MEMORY_DIM   4
+#define SHARED_MEMORY_DIM   49152
 
-#define ROW_BATCH_SIZE      8
 
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
@@ -30,6 +29,7 @@ This time for each block the respective threads contends the next pending row in
    and jumps to the step 2.
 */
 __inline__ __device__ float reduceSum(float value) {
+    __syncwarp();
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
     value += __shfl_down_sync(0xFFFFFFFF, value , 8);
     value += __shfl_down_sync(0xFFFFFFFF, value , 4);
@@ -38,47 +38,113 @@ __inline__ __device__ float reduceSum(float value) {
     return value;
 }
 
+__inline__ __device__ int reduceMax(int value) {
+    __syncwarp();
+    value = max(value,__shfl_down_sync(0xFFFFFFFF, value , 16));
+    value = max(value,__shfl_down_sync(0xFFFFFFFF, value , 8));
+    value = max(value,__shfl_down_sync(0xFFFFFFFF, value , 4));
+    value = max(value,__shfl_down_sync(0xFFFFFFFF, value , 2));
+    value = max(value,__shfl_down_sync(0xFFFFFFFF, value , 1));
+    return value;
+}
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    float* __restrict__ cachedInput=input->dataArray;
+    const float* __restrict__ cachedInput= input->dataArray;
+    const int* __restrict__ cachedRow= matrix->rowArray;
+
     unsigned short laneId = threadIdx.x % warpSize;  
+    unsigned short warpId = threadIdx.x / warpSize;
+    unsigned short warpNum = blockDim.x / warpSize;
+
+    unsigned int totalWarpNum = (gridDim.x*blockDim.x) / warpSize;
+    unsigned int absoluteWarpId = ((blockDim.x*blockIdx.x)+threadIdx.x) / warpSize;
     
-    extern __shared__ unsigned int nextPendingRow[];
+    extern __shared__ unsigned int sharedRowArray[];
+    unsigned int sharedDim=(SHARED_MEMORY_DIM/sizeof(unsigned int));
 
-    //row vector division in block subspaces
-    unsigned int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
-    unsigned int blockStart = blockIdx.x * rowsPerBlock;
-    unsigned int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    //not null element division in warp subspaces
+    unsigned int notNullPerWarp = (matrix->notNull + totalWarpNum - 1) / totalWarpNum;
+    unsigned int warpStart = absoluteWarpId * notNullPerWarp;
+    unsigned int warpEnd = min(warpStart + notNullPerWarp, matrix->notNull);
+    notNullPerWarp=warpEnd-warpStart;
     
-    if (blockEnd-blockStart < 1) return;
+    //shared memory division per warps 
+    unsigned int sharedPerThread = (sharedDim + blockDim.x - 1)/blockDim.x;
+    unsigned int sharedThreadStart = threadIdx.x * sharedPerThread;
+    unsigned int sharedThreadEnd = min(sharedThreadStart+sharedPerThread,sharedDim);
 
-    //Next pending row value initialized to 0
-    if (threadIdx.x==0) *nextPendingRow=0;
-    __syncthreads();
-    unsigned int selectedRowIndex;
-    if (laneId==0) {
-        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-    }
-    selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+    unsigned int sharedPerLane=sharedDim/warpSize;
+    unsigned int sharedLaneStart=laneId*sharedPerLane;
+    unsigned int sharedLaneEnd=sharedLaneStart+sharedPerLane;
 
-    while(selectedRowIndex<blockEnd) {
-        int startRow=matrix->rowArray[selectedRowIndex];
-        int endRow=matrix->rowArray[selectedRowIndex+1];
-        float acc = 0;
-        while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
-            startRow+=warpSize;
+    int row=-1;
+    bool rowFound=false;
+
+    for (unsigned int rowArrayPos=0; rowArrayPos<matrix->rowSize; rowArrayPos+=(sharedDim)) {      
+        __syncthreads();
+        unsigned int sharedLimit = min(sharedDim, matrix->rowSize - rowArrayPos);
+        sharedThreadEnd=min(sharedLimit,sharedThreadEnd);
+        for (int i=sharedThreadStart; i<sharedThreadEnd; i++) {
+            sharedRowArray[i]=__ldg(&cachedRow[i+rowArrayPos]);
+            output->dataArray[rowArrayPos+i]=0;
         }
-        
+    
+        __syncthreads();
+        if (rowFound) continue;
+        int laneLeft=sharedLaneStart;
+        int laneRight=min(sharedLaneEnd,sharedLimit);
+
+        if (sharedRowArray[laneLeft]<=warpStart && sharedRowArray[laneRight-1]>=warpStart) {
+            while (laneLeft<=laneRight) {
+                int laneMid = (laneLeft+laneRight) / 2;
+                
+                if (sharedRowArray[laneMid] <= warpStart) {
+                    row = laneMid+rowArrayPos;                    
+                    laneLeft = laneMid + 1;
+                } else {
+                    laneRight = laneMid - 1;
+                }
+            }
+        }
+        row=reduceMax(row);
+        row=__shfl_sync(0xFFFFFFFF, row,0);
+        rowFound=(row>=0);
+    }
+    //if (laneId==0) printf("thread %d %d has row %d\n",threadIdx.x,warpStart,row);
+    //return;
+   
+    unsigned int rowStart=warpStart;
+    unsigned int rowEnd;
+    while(rowStart<warpEnd) {
+        rowStart=matrix->rowArray[row];
+        rowEnd=matrix->rowArray[row+1];
+
+        bool atomicIndex=!(rowStart >= warpStart && rowEnd <= warpEnd);;
+        rowStart=max(rowStart,warpStart);
+        rowEnd=min(rowEnd,warpEnd);
+        unsigned int rowSize=rowEnd-rowStart;
+
+        unsigned int elementsPerLane = (rowSize + warpSize -1) / warpSize;
+        unsigned int laneStart = (laneId * elementsPerLane)+rowStart;
+        unsigned int laneEnd = min(laneStart + elementsPerLane, rowEnd);
+        float acc=0;
+        while(laneStart<laneEnd) {
+            acc+=matrix->dataArray[laneStart]*__ldg(&cachedInput[matrix->colArray[laneStart]]);
+            laneStart++;
+        }
         acc=reduceSum(acc);
         
         if (laneId==0) {
-            output->dataArray[selectedRowIndex]=acc;
-            selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
+            if (atomicIndex) {
+                atomicAdd(&output->dataArray[row],acc);
+            } else {
+                output->dataArray[row]+=acc;
+            }
         }
-        selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+        rowStart+=rowSize;
+        row++;
     }
+
 }
 
 //SpMV multiplication algorithm used for checking the results. 

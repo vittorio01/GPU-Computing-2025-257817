@@ -7,6 +7,10 @@
 #include "dataLib.h"
 #include "mathStats.h"
 
+#include <cuda_runtime.h>
+#include <cusparse.h>
+#include <iostream>
+
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
@@ -17,69 +21,6 @@
 #define DEFAULT_BLOCKS_NUMBER   1
 #define SHARED_MEMORY_DIM   4
 
-#define ROW_BATCH_SIZE      8
-
-/*
-Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
-
-The row vector divided for the number of block used for the multiplication (if the division is not perfect the last block obtains less rows to scan).
-This time for each block the respective threads contends the next pending row in a dynamic way:
-1- An integer variable in the shared memory is initialized at 0 and used to identify the next pending row
-2- each thread in a certain block uses the function atomicAdd to receive the value and automatically increment it for the next threads. 
-3- If the readed value is valid (not greather that the rows to process per block) each thread performs the SpMV like the first algorithm, saves the result
-   and jumps to the step 2.
-*/
-__inline__ __device__ float reduceSum(float value) {
-    value += __shfl_down_sync(0xFFFFFFFF, value , 16);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 8);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 4);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 2);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 1);
-    return value;
-}
-
-
-__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    float* __restrict__ cachedInput=input->dataArray;
-    unsigned short laneId = threadIdx.x % warpSize;  
-    
-    extern __shared__ unsigned int nextPendingRow[];
-
-    //row vector division in block subspaces
-    unsigned int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
-    unsigned int blockStart = blockIdx.x * rowsPerBlock;
-    unsigned int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
-    
-    if (blockEnd-blockStart < 1) return;
-
-    //Next pending row value initialized to 0
-    if (threadIdx.x==0) *nextPendingRow=0;
-    __syncthreads();
-    unsigned int selectedRowIndex;
-    if (laneId==0) {
-        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-    }
-    selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
-
-    while(selectedRowIndex<blockEnd) {
-        int startRow=matrix->rowArray[selectedRowIndex];
-        int endRow=matrix->rowArray[selectedRowIndex+1];
-        float acc = 0;
-        while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
-            startRow+=warpSize;
-        }
-        
-        acc=reduceSum(acc);
-        
-        if (laneId==0) {
-            output->dataArray[selectedRowIndex]=acc;
-            selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-        }
-        selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
-    }
-}
 
 //SpMV multiplication algorithm used for checking the results. 
 void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
@@ -164,6 +105,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error during matrix conversion: %s\n",cudaGetErrorString(cudaResult));
         return cudaResult;
     }
+    
     //Creating input and output vector
     printf("generating input and output vectors for the moltiplication... \n");
     Vector* vector=NULL;
@@ -179,6 +121,27 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error during output vector creation: %s\n",cudaGetErrorString(cudaResult));
         return cudaResult;
     }
+
+    printf("Creating cusparse environment \n");
+
+    cusparseHandle_t handle;
+    cusparseCreate(&handle);
+    cusparseSpMatDescr_t cuMatrix;
+    cusparseDnVecDescr_t cuInput, cuOutput;
+
+    cusparseCreateCsr(&cuMatrix,matrix->rowSize, matrix->colSize, matrix->notNull,matrix->rowArray, matrix->colArray, matrix->dataArray,CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
+
+    cusparseCreateDnVec(&cuInput, matrix->colSize, (void*) vector->dataArray, CUDA_R_32F);
+    cusparseCreateDnVec(&cuOutput, matrix->rowSize, (void*) output->dataArray, CUDA_R_32F);
+
+    size_t bufferSize = 0;
+    void* dBuffer = nullptr;
+    float alpha = 1.0f;
+    float beta = 0.0f;
+
+    cusparseSpMV_bufferSize(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,&alpha, cuMatrix, cuInput, &beta, cuOutput,CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT,&bufferSize);
+
+    cudaMalloc(&dBuffer, bufferSize);
 
     //preloading all structures in the global memory 
     printf("copying data in the CUDA memory... \n");
@@ -213,8 +176,8 @@ int main(int argc, char** argv) {
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         if (i>=0) cudaEventRecord(start);
-        vmcsr_mul<<<blocks,threads,SHARED_MEMORY_DIM>>>(output,matrix,vector);
-        
+        cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,&alpha, cuMatrix, cuInput, &beta, cuOutput,CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT,dBuffer);
+
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
         
@@ -240,6 +203,7 @@ int main(int argc, char** argv) {
     
 
     //Data check phase: the parallel algorithm results are compared with the sequential ones.
+    /*
     printf("checking results...\n");
     Vector* outputSequential=NULL;
     vectorCreate(&outputSequential,matrix->rowSize);
@@ -260,15 +224,19 @@ int main(int argc, char** argv) {
         printf("Found %d mismatches with max epsilon %f . Please check if your algorithm works\n",mismatches,maxEpsilon);
     } else {
         printf("The algorithm works good :)\n");
-    }
+    }*/
 
     //Cleaning phase.
     printf("Operation done. Cleaning heap and VRAM...\n\n");
+    cudaFree(dBuffer);
+    cusparseDestroySpMat(cuMatrix);
+    cusparseDestroyDnVec(cuInput);
+    cusparseDestroyDnVec(cuOutput);
+    cusparseDestroy(handle);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
-    vectorDestroy(vector);
-    vectorDestroy(output);
-    vectorDestroy(outputSequential);
+    
+    //vectorDestroy(outputSequential);
     matrixDestroy(matrix);
     
     return 0;

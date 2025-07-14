@@ -10,10 +10,12 @@ LIB_FOLDER=../libraries/
 
 CMP=nvcc
 
-SMM-CSR-PARALLEL-5: MAKE_LIBS $(SRC_FOLDER)/$(SRC_MAIN)
+ARCH=sm_89
+
+SMM-CSR-PARALLEL-6: MAKE_LIBS $(SRC_FOLDER)/$(SRC_MAIN)
 	mkdir -p $(BIN_FOLDER)
 	mkdir -p $(OUT_FOLDER)
-	$(CMP) -o $(BIN_FOLDER)/$(OUT_MAIN) $(SRC_FOLDER)/$(SRC_MAIN) -lm $(LIB_OBJ_FOLDER)/*.o -I $(LIB_HEADERS_FOLDER) --ptxas-options=-v -arch=sm_89
+	$(CMP) -o $(BIN_FOLDER)/$(OUT_MAIN) $(SRC_FOLDER)/$(SRC_MAIN) -lm $(LIB_OBJ_FOLDER)/*.o -I $(LIB_HEADERS_FOLDER) -arch=$(ARCH)
 
 clean: CLEAR_LIBS
 	rm -rf $(BIN_FOLDER)

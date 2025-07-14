@@ -7,6 +7,8 @@
 #include "dataLib.h"
 #include "mathStats.h"
 
+#include <mma.h>
+
 #define MISSING_MATRIX_INPUT_ERROR 10
 #define DATA_TRANSFER_ERROR 11
 
@@ -15,9 +17,9 @@
 
 #define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
-#define SHARED_MEMORY_DIM   4
+#define SHARED_MEMORY_DIM   49152
 
-#define ROW_BATCH_SIZE      8
+#define TENSOR_MATRIX_SIZE  16
 
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
@@ -30,6 +32,7 @@ This time for each block the respective threads contends the next pending row in
    and jumps to the step 2.
 */
 __inline__ __device__ float reduceSum(float value) {
+    __syncwarp();
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
     value += __shfl_down_sync(0xFFFFFFFF, value , 8);
     value += __shfl_down_sync(0xFFFFFFFF, value , 4);
@@ -40,17 +43,31 @@ __inline__ __device__ float reduceSum(float value) {
 
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    float* __restrict__ cachedInput=input->dataArray;
-    unsigned short laneId = threadIdx.x % warpSize;  
-    
-    extern __shared__ unsigned int nextPendingRow[];
+    using namespace nvcuda::wmma;
 
+    const float* __restrict__ cachedInput= input->dataArray;
+
+    unsigned int tensorMatrixDim = TENSOR_MATRIX_SIZE * TENSOR_MATRIX_SIZE;
+
+    unsigned short laneId = threadIdx.x % warpSize; 
+    unsigned short subLaneId = laneId % (warpSize/2);
+    unsigned short warpId = threadIdx.x / warpSize;
+
+    extern __shared__ unsigned char sharedMemory[];
+    unsigned int* nextPendingRow = (unsigned int*) sharedMemory;
+   
+    half* sharedMatrix = ((half*) (sharedMemory +16)) + (warpId*2*tensorMatrixDim);
+
+    unsigned int sharedMatrixLanePos=laneId*TENSOR_MATRIX_SIZE;
+    unsigned int sharedMatrixLaneDim=TENSOR_MATRIX_SIZE/2;
+    
     //row vector division in block subspaces
     unsigned int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
     unsigned int blockStart = blockIdx.x * rowsPerBlock;
     unsigned int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    rowsPerBlock=blockEnd-blockStart;
     
-    if (blockEnd-blockStart < 1) return;
+    if (rowsPerBlock == 0) return;
 
     //Next pending row value initialized to 0
     if (threadIdx.x==0) *nextPendingRow=0;
@@ -62,17 +79,61 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
 
     while(selectedRowIndex<blockEnd) {
-        int startRow=matrix->rowArray[selectedRowIndex];
-        int endRow=matrix->rowArray[selectedRowIndex+1];
+        unsigned int startRow=matrix->rowArray[selectedRowIndex];
+        unsigned int endRow=matrix->rowArray[selectedRowIndex+1];
+        unsigned int rowSize=endRow-startRow;
         float acc = 0;
-        while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
-            startRow+=warpSize;
+
+        //tensor core initialization
+        fragment<matrix_a, TENSOR_MATRIX_SIZE, TENSOR_MATRIX_SIZE, TENSOR_MATRIX_SIZE, half, row_major> matrixA;
+        fragment<matrix_b, TENSOR_MATRIX_SIZE, TENSOR_MATRIX_SIZE, TENSOR_MATRIX_SIZE, half, col_major> matrixB;
+        fragment<accumulator, TENSOR_MATRIX_SIZE, TENSOR_MATRIX_SIZE, TENSOR_MATRIX_SIZE, half> accumulator;
+        fill_fragment(accumulator, 0.0f);
+
+        unsigned int startRowShift=0;
+        while(startRowShift<rowSize) {
+            //loading phase 
+            unsigned int laneStartRow=startRow+startRowShift+(laneId*TENSOR_MATRIX_SIZE);
+            bool mask;
+            half2 value;
+            for (int i=0;i<sharedMatrixLaneDim;i+=2){
+                mask=(laneStartRow<endRow);
+                value.x=matrix->dataArray[laneStartRow*mask]*mask;
+                laneStartRow+=mask;
+                mask=(laneStartRow<endRow);
+                value.y=matrix->dataArray[min(laneStartRow*mask,endRow-1)]*mask;
+                laneStartRow+=mask;
+                reinterpret_cast<half2*>(sharedMatrix)[i] = value;
+
+            }
+            load_matrix_sync(matrixA,sharedMatrix, TENSOR_MATRIX_SIZE);
+            for (int i=0;i<sharedMatrixLaneDim;i+=2) {
+                half2 value;
+                mask=(laneStartRow<endRow);
+                value.x=__ldg(&cachedInput[matrix->colArray[laneStartRow*mask]])*mask;
+                laneStartRow+=mask;
+                mask=(laneStartRow<endRow);
+                value.x=__ldg(&cachedInput[matrix->colArray[laneStartRow*mask]])*mask;
+                laneStartRow+=mask;
+                reinterpret_cast<half2*>(sharedMatrix)[i] = value;
+            }
+            load_matrix_sync(matrixB,sharedMatrix, TENSOR_MATRIX_SIZE);
+
+            
+            //tensor multiplication phase
+            mma_sync(accumulator, matrixA, matrixB, accumulator);
+
+            //step
+            startRowShift+=tensorMatrixDim;
         }
-        
+        //accumulation phase 
+        store_matrix_sync(sharedMatrix, accumulator, TENSOR_MATRIX_SIZE, mem_row_major);
+        if (laneId<(warpSize/2)) {
+            acc=(float) sharedMatrix[(laneId*TENSOR_MATRIX_SIZE)+laneId];
+        }
         acc=reduceSum(acc);
         
+        //storing phase
         if (laneId==0) {
             output->dataArray[selectedRowIndex]=acc;
             selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;

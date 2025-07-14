@@ -15,9 +15,9 @@
 
 #define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
-#define SHARED_MEMORY_DIM   4
+#define SHARED_MEMORY_DIM   0
+#define RO_CACHE_DIM        65536
 
-#define ROW_BATCH_SIZE      8
 
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
@@ -30,6 +30,7 @@ This time for each block the respective threads contends the next pending row in
    and jumps to the step 2.
 */
 __inline__ __device__ float reduceSum(float value) {
+    __syncwarp();
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
     value += __shfl_down_sync(0xFFFFFFFF, value , 8);
     value += __shfl_down_sync(0xFFFFFFFF, value , 4);
@@ -40,44 +41,58 @@ __inline__ __device__ float reduceSum(float value) {
 
 
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
-    float* __restrict__ cachedInput=input->dataArray;
-    unsigned short laneId = threadIdx.x % warpSize;  
-    
-    extern __shared__ unsigned int nextPendingRow[];
+    const float* __restrict__ cachedInput= input->dataArray;
+
+    unsigned short laneId = threadIdx.x % 32;  
+    unsigned short warpId = threadIdx.x / 32;
+    unsigned int warpNum = blockDim.x /warpSize;
 
     //row vector division in block subspaces
-    unsigned int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
-    unsigned int blockStart = blockIdx.x * rowsPerBlock;
-    unsigned int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
+    int blockStart = blockIdx.x * rowsPerBlock;
+    int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    rowsPerBlock=blockEnd-blockStart;
+    if (rowsPerBlock == 0) return;     
+
+    //row vector supspace division for all threads
+    int rowsPerWarp = (rowsPerBlock + warpNum - 1) / warpNum;
+    int warpStart = warpId * rowsPerWarp;
+    int warpEnd = min(warpStart + rowsPerWarp, rowsPerBlock);
     
-    if (blockEnd-blockStart < 1) return;
+    warpStart+=blockStart;
+    warpEnd+=blockStart;
 
-    //Next pending row value initialized to 0
-    if (threadIdx.x==0) *nextPendingRow=0;
-    __syncthreads();
-    unsigned int selectedRowIndex;
-    if (laneId==0) {
-        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-    }
-    selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+    unsigned int sharedPos=0;
+    while(sharedPos<matrix->colSize) {
 
-    while(selectedRowIndex<blockEnd) {
-        int startRow=matrix->rowArray[selectedRowIndex];
-        int endRow=matrix->rowArray[selectedRowIndex+1];
-        float acc = 0;
-        while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
-            startRow+=warpSize;
+        for (unsigned int selectedRowIndex=warpStart; selectedRowIndex<warpEnd; selectedRowIndex++) {
+            int startRow=matrix->rowArray[selectedRowIndex];
+            int endRow=matrix->rowArray[selectedRowIndex+1];
+            int rowSize=endRow-startRow;
+            float acc = 0;
+
+            unsigned int elementsPerLane = (rowSize + warpSize -1) / warpSize;
+            unsigned int laneStart = laneId * elementsPerLane + startRow;
+            unsigned int laneEnd = min(laneStart + elementsPerLane, endRow);
+            elementsPerLane=elementsPerLane/2;
+            
+            for (unsigned int i=laneStart;i<laneEnd;i++) {
+                unsigned int inputCol=matrix->colArray[i];
+                int offset = inputCol - sharedPos;
+                if (offset < RO_CACHE_DIM && offset>=0) acc += matrix->dataArray[i] * __ldg(&cachedInput[inputCol]);
+            }
+            acc=reduceSum(acc);
+            
+            if (laneId==0) {
+                if (sharedPos==0) {
+                    output->dataArray[selectedRowIndex]=acc;
+                } else {
+                    output->dataArray[selectedRowIndex]+=acc;
+                }
+            }
         }
-        
-        acc=reduceSum(acc);
-        
-        if (laneId==0) {
-            output->dataArray[selectedRowIndex]=acc;
-            selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-        }
-        selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+
+        sharedPos+=RO_CACHE_DIM;
     }
 }
 
@@ -200,8 +215,6 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error during output vector prefetching on device %d: %s\n", currentDevice,cudaGetErrorString(cudaResult));
         return cudaResult;
     }
-
-
      //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
     printf("performing matrix to vector multiplication...\n");
     

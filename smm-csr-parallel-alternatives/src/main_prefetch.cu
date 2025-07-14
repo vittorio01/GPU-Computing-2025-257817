@@ -15,9 +15,8 @@
 
 #define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
-#define SHARED_MEMORY_DIM   4
+#define SHARED_MEMORY_DIM   12288
 
-#define ROW_BATCH_SIZE      8
 
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
@@ -30,6 +29,7 @@ This time for each block the respective threads contends the next pending row in
    and jumps to the step 2.
 */
 __inline__ __device__ float reduceSum(float value) {
+    __syncwarp();
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
     value += __shfl_down_sync(0xFFFFFFFF, value , 8);
     value += __shfl_down_sync(0xFFFFFFFF, value , 4);
@@ -39,22 +39,53 @@ __inline__ __device__ float reduceSum(float value) {
 }
 
 
-__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
+__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input, float*  buffer) {
     float* __restrict__ cachedInput=input->dataArray;
-    unsigned short laneId = threadIdx.x % warpSize;  
-    
-    extern __shared__ unsigned int nextPendingRow[];
 
-    //row vector division in block subspaces
+    extern __shared__ unsigned char sharedMemory[];
+    unsigned int sharedDim=(SHARED_MEMORY_DIM/sizeof(float));
+
+    float* sharedColVector=(float*) sharedMemory;
+    //unsigned int* nextPendingRow=(unsigned int*) sharedMemory;
+
+    //unsigned short laneId = threadIdx.x % warpSize;  
+
+    unsigned int colsPerBlock = (matrix->notNull + gridDim.x -1 ) / gridDim.x;
+    unsigned int colsBlockStart = blockIdx.x * colsPerBlock;
+    unsigned int colsBlockEnd= min(colsBlockStart+colsPerBlock,matrix->notNull);
+
+    unsigned int inputPerThread = (matrix->colSize + blockDim.x -1) / blockDim.x;
+    unsigned int inputThreadStart = threadIdx.x * inputPerThread;
+    unsigned int inputThreadEnd = min(inputThreadStart+inputPerThread,matrix->colSize);
+    
+    
+    for (unsigned int sharedWindowPos=colsBlockStart; sharedWindowPos<colsBlockEnd; sharedWindowPos+=sharedDim) {
+        unsigned int sharedLimit=min(sharedDim,colsBlockEnd-sharedWindowPos);
+        for (unsigned int i=0;i<sharedLimit;i++) {
+            unsigned int index=matrix->colArray[i+sharedWindowPos];
+            if (index>=inputThreadStart && index<inputThreadEnd) {
+                sharedColVector[i]=__ldg(&cachedInput[index]);
+            }
+  
+        }
+        __syncthreads();
+        for (int i=threadIdx.x; i<sharedLimit; i+=blockDim.x) {
+            buffer[sharedWindowPos+i]=sharedColVector[i];
+        }
+    }
+    /*
+    return;
+        //row vector division in block subspaces
     unsigned int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
     unsigned int blockStart = blockIdx.x * rowsPerBlock;
     unsigned int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    rowsPerBlock=blockEnd-blockStart;
     
-    if (blockEnd-blockStart < 1) return;
-
+    if (rowsPerBlock == 0) return;
     //Next pending row value initialized to 0
     if (threadIdx.x==0) *nextPendingRow=0;
     __syncthreads();
+
     unsigned int selectedRowIndex;
     if (laneId==0) {
         selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
@@ -65,12 +96,14 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
         int startRow=matrix->rowArray[selectedRowIndex];
         int endRow=matrix->rowArray[selectedRowIndex+1];
         float acc = 0;
-        while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
-            startRow+=warpSize;
-        }
         
+        unsigned int elementsPerLane = (endRow-startRow + warpSize -1) / warpSize;
+        unsigned int laneStart = (laneId * elementsPerLane)+startRow;
+        unsigned int laneEnd = min(laneStart + elementsPerLane, endRow);
+        while(laneStart<laneEnd) {
+            acc+=buffer[laneStart]; //matrix->dataArray[laneStart];
+            laneStart++;
+        }
         acc=reduceSum(acc);
         
         if (laneId==0) {
@@ -78,9 +111,8 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
             selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
         }
         selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
-    }
+    }*/
 }
-
 //SpMV multiplication algorithm used for checking the results. 
 void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     output->size=matrix->rowSize;  
@@ -180,6 +212,14 @@ int main(int argc, char** argv) {
         return cudaResult;
     }
 
+    float* buffer=NULL;
+    cudaResult=cudaMallocManaged((void**)&buffer, matrix->notNull*sizeof(float));
+        if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during buffer vector creation: %s\n",cudaGetErrorString(cudaResult));
+        return cudaResult;
+    }
+
+
     //preloading all structures in the global memory 
     printf("copying data in the CUDA memory... \n");
     
@@ -213,7 +253,7 @@ int main(int argc, char** argv) {
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         if (i>=0) cudaEventRecord(start);
-        vmcsr_mul<<<blocks,threads,SHARED_MEMORY_DIM>>>(output,matrix,vector);
+        vmcsr_mul<<<blocks,threads,SHARED_MEMORY_DIM>>>(output,matrix,vector,buffer);
         
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
