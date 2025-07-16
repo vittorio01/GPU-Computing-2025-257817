@@ -41,26 +41,7 @@ int main(int argc, char** argv) {
         return MISSING_MATRIX_INPUT_ERROR;
     }
 
-    //verify the arguments for the blocks and threads allocation  
-    int blocks=DEFAULT_BLOCKS_NUMBER;
-    int threads=DEFAULT_THREADS_NUMBER;
-    for (int i=2;i<argc;i++) {
-        if (strcmp(argv[i],"-b")==0 && (i+1)<argc) {
-            i++;
-            blocks=atoi(argv[i]);
-            continue;
-        }
-        if (strcmp(argv[i],"-t")==0 && (i+1)<argc) {
-            i++;
-            threads=atoi(argv[i]);
-        }
-    }
-
-    if (threads<0 || blocks<0) {
-        printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
-        return 1;
-    }
-    printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
+    printf("Launching SPVM on matrix %s\n",argv[1]);
 
     //Creating matrix structure and opening the file
     SparseMatrix* matrix=NULL;

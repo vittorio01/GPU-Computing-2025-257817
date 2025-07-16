@@ -1,0 +1,217 @@
+Wed Jul 16 16:58:57 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA L40S                    On  |   00000000:A1:00.0 Off |                    0 |
+| N/A   27C    P8             32W /  350W |       0MiB /  46068MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+ 
+---------- Processing matrices  ----------
+Launching SPVM on matrix ../data/dbir2.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+Creating cusparse environment 
+copying data in the CUDA memory... 
+performing matrix to vector multiplication...
+iteration 0 took 0.011264 ms
+iteration 1 took 0.012192 ms
+iteration 2 took 0.012096 ms
+iteration 3 took 0.012256 ms
+iteration 4 took 0.011264 ms
+iteration 5 took 0.011328 ms
+iteration 6 took 0.011264 ms
+iteration 7 took 0.011264 ms
+iteration 8 took 0.011264 ms
+iteration 9 took 0.012224 ms
+iteration 10 took 0.012192 ms
+iteration 11 took 0.011264 ms
+iteration 12 took 0.011264 ms
+iteration 13 took 0.012096 ms
+iteration 14 took 0.012288 ms
+iteration 15 took 0.011264 ms
+iteration 16 took 0.011264 ms
+iteration 17 took 0.012096 ms
+iteration 18 took 0.011264 ms
+iteration 19 took 0.011264 ms
+Executed 20 iterations, floating point operations: 2316318 average time: 0.011625 ms variance: 0.000000 ms
+average GFLOP/s: 199.252436
+Effective bandwidth: 1242.871346 GB/s
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/ifiss_mat.mtx
+Error during matrix reading phase: cannot open file
+Launching SPVM on matrix ../data/ex11.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+Creating cusparse environment 
+copying data in the CUDA memory... 
+performing matrix to vector multiplication...
+iteration 0 took 0.011232 ms
+iteration 1 took 0.010272 ms
+iteration 2 took 0.010240 ms
+iteration 3 took 0.010240 ms
+iteration 4 took 0.010240 ms
+iteration 5 took 0.010176 ms
+iteration 6 took 0.011072 ms
+iteration 7 took 0.010240 ms
+iteration 8 took 0.010240 ms
+iteration 9 took 0.010400 ms
+iteration 10 took 0.010240 ms
+iteration 11 took 0.010368 ms
+iteration 12 took 0.010240 ms
+iteration 13 took 0.010240 ms
+iteration 14 took 0.010240 ms
+iteration 15 took 0.010240 ms
+iteration 16 took 0.010336 ms
+iteration 17 took 0.010240 ms
+iteration 18 took 0.010240 ms
+iteration 19 took 0.010240 ms
+Executed 20 iterations, floating point operations: 2193896 average time: 0.010345 ms variance: 0.000000 ms
+average GFLOP/s: 212.066109
+Effective bandwidth: 1291.667940 GB/s
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/language.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+Creating cusparse environment 
+copying data in the CUDA memory... 
+performing matrix to vector multiplication...
+iteration 0 took 0.015360 ms
+iteration 1 took 0.015296 ms
+iteration 2 took 0.014400 ms
+iteration 3 took 0.014336 ms
+iteration 4 took 0.014336 ms
+iteration 5 took 0.014336 ms
+iteration 6 took 0.015168 ms
+iteration 7 took 0.014336 ms
+iteration 8 took 0.015136 ms
+iteration 9 took 0.015168 ms
+iteration 10 took 0.015136 ms
+iteration 11 took 0.014336 ms
+iteration 12 took 0.015136 ms
+iteration 13 took 0.015264 ms
+iteration 14 took 0.015328 ms
+iteration 15 took 0.015296 ms
+iteration 16 took 0.015360 ms
+iteration 17 took 0.015264 ms
+iteration 18 took 0.015360 ms
+iteration 19 took 0.015360 ms
+Executed 20 iterations, floating point operations: 2432668 average time: 0.014979 ms variance: 0.000000 ms
+average GFLOP/s: 162.400021
+Effective bandwidth: 1294.141514 GB/s
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/Linux_call_graph.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+Creating cusparse environment 
+copying data in the CUDA memory... 
+performing matrix to vector multiplication...
+iteration 0 took 0.018432 ms
+iteration 1 took 0.018400 ms
+iteration 2 took 0.018432 ms
+iteration 3 took 0.018432 ms
+iteration 4 took 0.018400 ms
+iteration 5 took 0.018432 ms
+iteration 6 took 0.018432 ms
+iteration 7 took 0.019296 ms
+iteration 8 took 0.018432 ms
+iteration 9 took 0.018432 ms
+iteration 10 took 0.018624 ms
+iteration 11 took 0.018432 ms
+iteration 12 took 0.018432 ms
+iteration 13 took 0.018272 ms
+iteration 14 took 0.018432 ms
+iteration 15 took 0.018400 ms
+iteration 16 took 0.018208 ms
+iteration 17 took 0.018240 ms
+iteration 18 took 0.018432 ms
+iteration 19 took 0.018432 ms
+Executed 20 iterations, floating point operations: 2417816 average time: 0.018450 ms variance: 0.000000 ms
+average GFLOP/s: 131.046799
+Effective bandwidth: 997.067560 GB/s
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/nemeth24.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+Creating cusparse environment 
+copying data in the CUDA memory... 
+performing matrix to vector multiplication...
+iteration 0 took 0.009216 ms
+iteration 1 took 0.009216 ms
+iteration 2 took 0.009216 ms
+iteration 3 took 0.009280 ms
+iteration 4 took 0.009216 ms
+iteration 5 took 0.009280 ms
+iteration 6 took 0.009216 ms
+iteration 7 took 0.009312 ms
+iteration 8 took 0.013312 ms
+iteration 9 took 0.010240 ms
+iteration 10 took 0.009216 ms
+iteration 11 took 0.009120 ms
+iteration 12 took 0.009216 ms
+iteration 13 took 0.009216 ms
+iteration 14 took 0.009216 ms
+iteration 15 took 0.009216 ms
+iteration 16 took 0.010112 ms
+iteration 17 took 0.009216 ms
+iteration 18 took 0.009216 ms
+iteration 19 took 0.008416 ms
+Executed 20 iterations, floating point operations: 1516056 average time: 0.009444 ms variance: 0.000001 ms
+average GFLOP/s: 160.530947
+Effective bandwidth: 975.264447 GB/s
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/twotone.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+Creating cusparse environment 
+copying data in the CUDA memory... 
+performing matrix to vector multiplication...
+iteration 0 took 0.012352 ms
+iteration 1 took 0.012288 ms
+iteration 2 took 0.012288 ms
+iteration 3 took 0.012288 ms
+iteration 4 took 0.012224 ms
+iteration 5 took 0.012096 ms
+iteration 6 took 0.012288 ms
+iteration 7 took 0.012288 ms
+iteration 8 took 0.012288 ms
+iteration 9 took 0.012288 ms
+iteration 10 took 0.012288 ms
+iteration 11 took 0.011264 ms
+iteration 12 took 0.012288 ms
+iteration 13 took 0.012288 ms
+iteration 14 took 0.012288 ms
+iteration 15 took 0.012128 ms
+iteration 16 took 0.011264 ms
+iteration 17 took 0.011424 ms
+iteration 18 took 0.011264 ms
+iteration 19 took 0.012288 ms
+Executed 20 iterations, floating point operations: 2448448 average time: 0.012067 ms variance: 0.000000 ms
+average GFLOP/s: 202.902906
+Effective bandwidth: 1337.496079 GB/s
+Operation done. Cleaning heap and VRAM...
+
+ 

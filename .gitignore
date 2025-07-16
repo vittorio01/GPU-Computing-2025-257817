@@ -5,6 +5,9 @@ smm-csr-parallel-1/bin
 smm-csr-parallel-2/bin
 smm-csr-parallel-3/bin 
 smm-csr-parallel-4/bin 
+smm-csr-parallel-5/bin 
+smm-csr-parallel-6/bin 
+smm-csr-parallel-cusparse/bin 
 smm-csr-sequential/bin 
 
 paper/main.bbl

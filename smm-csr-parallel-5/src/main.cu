@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
             custom_settings=true;
         }
     }
-
+    printf("Launching SPVM on matrix %s\n",argv[1]);
     if (threads<=0 || blocks<=0) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
