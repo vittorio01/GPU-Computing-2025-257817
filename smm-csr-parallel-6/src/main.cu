@@ -15,13 +15,14 @@
 #define WARMUP_CYCLES 5
 #define ITERATIONS 20
 
-#define DEFAULT_THREADS_NUMBER  1
+#define DEFAULT_THREADS_NUMBER  256
 #define DEFAULT_BLOCKS_NUMBER   1
 
-#define SHARED_BUFFER_SIZE      3968
+#define SHARED_PER_THREAD       13
+#define SHARED_BUFFER_SIZE      SHARED_PER_THREAD
 #define SHARED_MEMORY_DIM       (SHARED_BUFFER_SIZE*sizeof(float))
-#define WARP_MAX                128
-#define ROUND_SIZE              256
+
+#define BLOCK_PER_NOT_NULL      3200
 
 __inline__ __device__ float reduceSum(float value) {
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
@@ -32,7 +33,7 @@ __inline__ __device__ float reduceSum(float value) {
     return value;
 }
 
-__inline__ __device__ int binarySearch(unsigned int* array, unsigned int lastElement, unsigned int value) {
+__inline__ __device__ int rowSearch(unsigned int* array, unsigned int lastElement, unsigned int value) {
     int row=-1;
     unsigned int left=0;
     unsigned int right=lastElement;
@@ -52,12 +53,11 @@ __inline__ __device__ int binarySearch(unsigned int* array, unsigned int lastEle
 
 
 __global__ void vmcsr_mul(Vector* output,SparseMatrix* matrix,Vector* input,unsigned int* blockDivision) {    
-
-    
     float* __restrict__ cachedInput=input->dataArray; 
     extern __shared__ unsigned int loadedRows[];
     float* rowsBuffer=(float*) (loadedRows+blockDim.x);
     float* sharedBuffer=rowsBuffer+blockDim.x;
+    unsigned int sharedBufferSize=(SHARED_PER_THREAD*blockDim.x);
 
     for (unsigned int baseRow=blockDivision[blockIdx.x];baseRow<blockDivision[blockIdx.x+1];baseRow+=blockDim.x-1) {
         unsigned int rowLimit=min(blockDivision[blockIdx.x+1]-baseRow,(blockDim.x-1));
@@ -66,9 +66,8 @@ __global__ void vmcsr_mul(Vector* output,SparseMatrix* matrix,Vector* input,unsi
             loadedRows[threadIdx.x]=matrix->rowArray[baseRow+threadIdx.x];
         }
         __syncthreads();
-
-        for (unsigned int bufferPos=loadedRows[0];bufferPos<loadedRows[rowLimit];bufferPos+=SHARED_BUFFER_SIZE) {
-            unsigned int bufferLimit=min(SHARED_BUFFER_SIZE ,loadedRows[rowLimit]-bufferPos);
+        for (unsigned int bufferPos=loadedRows[0];bufferPos<loadedRows[rowLimit];bufferPos+=sharedBufferSize) {
+            unsigned int bufferLimit=min(sharedBufferSize ,loadedRows[rowLimit]-bufferPos);
             for (unsigned int i=threadIdx.x;i<bufferLimit;i+=blockDim.x) {
                 sharedBuffer[i]=matrix->dataArray[bufferPos+i]*__ldg(&cachedInput[matrix->colArray[bufferPos+i]]);
             };
@@ -76,8 +75,7 @@ __global__ void vmcsr_mul(Vector* output,SparseMatrix* matrix,Vector* input,unsi
             unsigned int elementsPerThread=(bufferLimit+blockDim.x-1)/blockDim.x;
             unsigned int threadStart=elementsPerThread*threadIdx.x;
             unsigned int threadEnd=min(threadStart+elementsPerThread,bufferLimit);
-            unsigned int row=binarySearch(loadedRows,rowLimit,(threadStart+bufferPos));
-
+            unsigned int row=rowSearch(loadedRows,rowLimit,(threadStart+bufferPos));
             unsigned int endRow=loadedRows[row+1]-bufferPos;
             float acc=0;
             while(threadStart<threadEnd) {
@@ -99,215 +97,6 @@ __global__ void vmcsr_mul(Vector* output,SparseMatrix* matrix,Vector* input,unsi
             output->dataArray[baseRow+threadIdx.x]=rowsBuffer[threadIdx.x];
         }
     }
-    
-    /*//float* __restrict__ cachedInput=input->dataArray; 
-    extern __shared__ int pendingRows[];
-    float* outputBuffer=(float*) (pendingRows+blockDim.x);
-
-    unsigned int laneId=threadIdx.x%32;
-
-    for (int baseRow=blockDivision[blockIdx.x];baseRow<blockDivision[blockIdx.x+1];baseRow+=blockDim.x) {
-        unsigned int rowLimit=min(blockDim.x,blockDivision[blockIdx.x+1]-baseRow);
-        if (threadIdx.x<rowLimit) {
-            unsigned int startRow=matrix->rowArray[baseRow+threadIdx.x];
-            unsigned int endRow=matrix->rowArray[baseRow+threadIdx.x+1];
-            pendingRows[threadIdx.x]=((endRow-startRow+WARP_MAX-1)/WARP_MAX);
-            outputBuffer[threadIdx.x]=0;
-        }
-        
-        __syncthreads();
-        unsigned int warpRow=baseRow;
-        while(warpRow-baseRow<rowLimit) {
-            int warpNum;
-            if (laneId==0) warpNum=atomicSub(&pendingRows[warpRow-baseRow],1);
-            warpNum=__shfl_sync(0xFFFFFFFF,warpNum,0);
-            if (warpNum<1) {
-                warpRow++;
-                continue;
-            }
-            unsigned int startRow=matrix->rowArray[warpRow];
-            unsigned int endRow=matrix->rowArray[warpRow+1];
-            warpNum=((endRow-startRow+WARP_MAX-1)/WARP_MAX)-warpNum;
-            unsigned int warpStart=startRow+(WARP_MAX*warpNum);
-            unsigned int warpEnd=min(warpStart+WARP_MAX,endRow);
-            float acc=0;
-            while(warpStart<warpEnd) {
-                unsigned int index=min(warpStart+laneId,warpEnd);
-                acc+=matrix->dataArray[index]*input->dataArray[matrix->colArray[index]]*(index<warpEnd);
-                warpStart+=warpSize;
-            }
-            acc=reduceSum(acc);
-            if (laneId==0 && acc!=0) atomicAdd(&outputBuffer[warpRow-baseRow],acc);
-        
-        }
-        __syncthreads();
-        if (threadIdx.x<rowLimit) output->dataArray[warpRow]=outputBuffer[threadIdx.x];
-    }*/
-    
-    /*float* __restrict__ cachedInput=input->dataArray; 
-
-    extern __shared__ float sharedBuffer[];
-    unsigned int sharedDim=(SHARED_MEMORY_DIM / sizeof(float));
-    
-    unsigned int laneId=threadIdx.x%warpSize;
-
-    for (unsigned int baseRow=blockDivision[blockIdx.x];baseRow<blockDivision[blockIdx.x+1];baseRow+=blockDim.x) {
-        unsigned int rowLimit=min(blockDivision[blockIdx.x+1]-baseRow,blockDim.x);
-        unsigned int blockStart=matrix->rowArray[baseRow];
-        unsigned int blockEnd=matrix->rowArray[baseRow+rowLimit];
-        __syncthreads();
-        for (int pos=blockStart;pos<blockEnd;pos+=sharedDim) {
-            unsigned int sharedLimit=min(sharedDim,blockEnd-pos);
-            for (int i=threadIdx.x;i<sharedLimit;i+=blockDim.x) {
-                sharedBuffer[i]=matrix->dataArray[pos+i]*__ldg(&cachedInput[matrix->colArray[pos+i]]);
-            }
-            __syncthreads();
-            
-            unsigned int warpDim=(sharedLimit+(blockDim.x/warpSize)-1)/(blockDim.x/warpSize);
-            unsigned int warpStart=(threadIdx.x/warpSize)*warpDim;
-            unsigned int warpEnd=min(warpStart+warpDim,sharedLimit);
-            for (int row=0;row<rowLimit;row+=!(matrix->rowArray[row+baseRow+1]-pos)<=sharedLimit) {
-                unsigned int startRow=max(matrix->rowArray[row+baseRow]-pos,warpStart);
-                unsigned int endRow=min(matrix->rowArray[row+baseRow+1]-pos,warpEnd);
-                float acc=0;
-                while(startRow<endRow) {
-                    unsigned int index=min(startRow+laneId,endRow);
-                    acc+=sharedBuffer[index]*(index<endRow);
-                    startRow+=warpSize;
-                }
-                acc=reduceSum(acc);
-                if (laneId==0 && acc!=0) atomicAdd(&output->dataArray[baseRow+row],acc);
-                warpStart=max(warpStart,endRow);
-            }    
-            __syncthreads();
-        }
-        
-    }*/
-    
-
-
-    /*float* __restrict__ cachedInput=input->dataArray; 
-
-    extern __shared__ float sharedBuffer[];
-    unsigned int sharedDim=(SHARED_MEMORY_DIM)/sizeof(float);
-    
-    unsigned int laneId=threadIdx.x%warpSize;
-
-    unsigned int blockStart=matrix->rowArray[blockDivision[blockIdx.x]];
-    unsigned int blockEnd=matrix->rowArray[blockDivision[blockIdx.x+1]];
-
-    for (int i=threadIdx.x+blockDivision[blockIdx.x];i<blockDi__global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {    
-    unsigned int elementsPerBlock = (matrix->notNull + gridDim.x - 1) / gridDim.x;
-    unsigned int blockStart = blockIdx.x * elementsPerBlock;
-    unsigned int blockEnd = min(blockStart + elementsPerBlock, matrix->notNull);
-
-    if(blockIdx.x==0) {
-        blockDivision[0]=0;
-        blockDivision[gridDim.x]=matrix->rowSize;
-        return;
-    }
-
-    int row=-1;
-    unsigned int left=0;
-    unsigned int right=matrix->rowSize;
-    if (matrix->rowArray[left]<=blockStart && matrix->rowArray[right]>=blockStart) {        
-        while (left<=right) {
-            int mid = (left+right) / 2;
-            if (matrix->rowArray[mid] <= blockStart) {
-                row = mid;                    
-                left = mid + 1;
-            } else {
-                right = mid - 1;
-            }
-        }
-    }
-    blockDivision[blockIdx.x]=row;
-}vision[blockIdx.x+1];i+=blockDim.x) {
-        output->dataArray[i]=0;
-    }
-    __syncthreads();
-
-    unsigned int row=blockDivision[blockIdx.x];
-    for (int pos=blockStart;pos<blockEnd;pos+=sharedDim) {
-        unsigned int sharedLimit=min(sharedDim,blockEnd-pos);
-        for (int i=threadIdx.x;i<sharedLimit;i+=blockDim.x) {
-            sharedBuffer[i]=matrix->dataArray[pos+i]*__ldg(&cachedInput[matrix->colArray[pos+i]]);
-        }
-        __syncthreads();
-        unsigned int warpDim=(sharedLimit+(blockDim.x/warpSize)-1)/(blockDim.x/warpSize);
-        unsigned int warpStart=(threadIdx.x/warpSize)*warpDim;
-        unsigned int warpEnd=min(warpStart+warpDim,sharedLimit);
-       
-        while(warpStart<warpEnd) {
-            unsigned int startRow=max(matrix->rowArray[row]-pos,warpStart)+laneId;
-            unsigned int endRow=min(matrix->rowArray[row+1]-pos,warpEnd);
-
-            float acc=0;
-            while(startRow<endRow) {
-                acc+=sharedBuffer[startRow];
-                startRow+=warpSize;
-            }
-            acc=reduceSum(acc);
-            if (laneId==0 && acc!=0) atomicAdd(&output->dataArray[row],acc);
-            row+=!(matrix->rowArray[row+1]-pos>sharedLimit);
-            warpStart=max(warpStart,endRow);
-        }        
-        __syncthreads();
-    }*/
-    
-    
-    /*
-    float* __restrict__ cachedInput=input->dataArray; 
-
-    extern __shared__ unsigned int pendingRow[];
-    float* sharedBuffer=(float*) (pendingRow+1);
-    unsigned int sharedDim=(SHARED_MEMORY_DIM-sizeof(unsigned int))/sizeof(float);
-    
-    unsigned int laneId=threadIdx.x%32;
-    unsigned int blockStart=matrix->rowArray[blockDivision[blockIdx.x]];
-    unsigned int blockEnd=matrix->rowArray[blockDivision[blockIdx.x+1]];
-
-    for (int i=threadIdx.x+blockDivision[blockIdx.x];i<blockDivision[blockIdx.x+1];i+=blockDim.x) {
-        output->dataArray[i]=0;
-    }
-
-    if (threadIdx.x==0) *pendingRow=blockDivision[blockIdx.x];
-    __syncthreads();
-
-    unsigned int row;
-    if (laneId==0) row=atomicAdd(pendingRow,1);
-    row=__shfl_sync(0xFFFFFFFF,row, 0);
-
-    for (int pos=blockStart;pos<blockEnd;pos+=sharedDim) {
-        unsigned int sharedLimit=min(sharedDim,blockEnd-pos);
-        for (int i=threadIdx.x;i<sharedLimit;i+=blockDim.x) {
-            sharedBuffer[i]=matrix->dataArray[pos+i];//*__ldg(&cachedInput[matrix->colArray[pos+i]]);
-        }
-        __syncthreads();
-
-        unsigned int startRow=0;
-        unsigned int endRow=1;
-        while(endRow<sharedLimit && row<blockDivision[blockIdx.x+1]) {
-            startRow=max(matrix->rowArray[row]-pos,0);
-            endRow=min(matrix->rowArray[row+1]-pos,sharedLimit);
-            float acc=0;
-            while(startRow<endRow) {
-                unsigned int index=min(startRow+laneId,endRow);
-                acc+=sharedBuffer[index]*(index<endRow);
-                startRow+=warpSize;
-            }
-            acc=reduceSum(acc);
-            
-            if (laneId==0) {
-                output->dataArray[row]+=acc;
-                if (matrix->rowArray[row+1]-pos<sharedLimit) {
-                    row=atomicAdd(pendingRow,1);
-                }
-            }
-            row=__shfl_sync(0xFFFFFFFF,row, 0);
-        };
-        __syncthreads();   
-    }*/
 }
 
 __global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {    
@@ -357,13 +146,15 @@ int main(int argc, char** argv) {
         return MISSING_MATRIX_INPUT_ERROR;
     }
 
-    //verify the arguments for the blocks and threads allocation  
+    //verify the arguments for the blocks and threads allocation 
+    bool custom_settings=false; 
     int blocks=DEFAULT_BLOCKS_NUMBER;
     int threads=DEFAULT_THREADS_NUMBER;
     for (int i=2;i<argc;i++) {
         if (strcmp(argv[i],"-b")==0 && (i+1)<argc) {
             i++;
             blocks=atoi(argv[i]);
+            custom_settings=true;
             continue;
         }
         if (strcmp(argv[i],"-t")==0 && (i+1)<argc) {
@@ -398,7 +189,7 @@ int main(int argc, char** argv) {
         return COL_ARRAY_NOT_VALID;
 
         case MEMORY_ALLOCATION_ERROR:
-        printf("Error during matrix reading phase: error during memory allocation\n");
+        printf("Error during matrix reading phase: errothreadsr during memory allocation\n");
         return MEMORY_ALLOCATION_ERROR;
 
         case DATA_ARRAY_NOT_VALID:
@@ -478,6 +269,10 @@ int main(int argc, char** argv) {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     
+    if (!custom_settings) {
+        blocks=matrix->notNull/BLOCK_PER_NOT_NULL;
+    }
+
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
@@ -495,7 +290,7 @@ int main(int argc, char** argv) {
             cudaEventElapsedTime(&times[i], start,stop);
         }
         if (i>=0) cudaEventRecord(start);
-        unsigned int sharedDim=SHARED_MEMORY_DIM+(sizeof(float)*threads)+(sizeof(unsigned int)*threads);
+        unsigned int sharedDim=(SHARED_PER_THREAD*threads*sizeof(float))+(sizeof(float)*threads)+(sizeof(unsigned int)*threads);
         vmcsr_mul<<<blocks,threads,sharedDim>>>(output,matrix,vector,blockDivision);
         
         if (i>=0) cudaEventRecord(stop);

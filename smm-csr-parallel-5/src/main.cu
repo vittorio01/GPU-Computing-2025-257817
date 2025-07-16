@@ -13,11 +13,13 @@
 #define WARMUP_CYCLES 5
 #define ITERATIONS 20
 
-#define DEFAULT_THREADS_NUMBER  1
+#define DEFAULT_THREADS_NUMBER  256
 #define DEFAULT_BLOCKS_NUMBER   1
 #define SHARED_MEMORY_DIM   4
 
 #define ROW_BATCH_SIZE      8
+
+#define BLOCK_PER_NOT_NULL      3200
 
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
@@ -39,18 +41,15 @@ __inline__ __device__ float reduceSum(float value) {
 }
 
 
-__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
+__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input,unsigned int* blockDivision) {
     float* __restrict__ cachedInput=input->dataArray;
     unsigned short laneId = threadIdx.x % warpSize;  
     
     extern __shared__ unsigned int nextPendingRow[];
 
     //row vector division in block subspaces
-    unsigned int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
-    unsigned int blockStart = blockIdx.x * rowsPerBlock;
-    unsigned int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
-    
-    if (blockEnd-blockStart < 1) return;
+    unsigned int blockStart=blockDivision[blockIdx.x];
+    unsigned int blockEnd=blockDivision[blockIdx.x+1];
 
     //Next pending row value initialized to 0
     if (threadIdx.x==0) *nextPendingRow=0;
@@ -81,6 +80,34 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
     }
 }
 
+__global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {    
+    unsigned int elementsPerBlock = (matrix->notNull + gridDim.x - 1) / gridDim.x;
+    unsigned int blockStart = blockIdx.x * elementsPerBlock;
+    unsigned int blockEnd = min(blockStart + elementsPerBlock, matrix->notNull);
+
+    if(blockIdx.x==0) {
+        blockDivision[0]=0;
+        blockDivision[gridDim.x]=matrix->rowSize;
+        return;
+    }
+
+    int row=-1;
+    unsigned int left=0;
+    unsigned int right=matrix->rowSize;
+    if (matrix->rowArray[left]<=blockStart && matrix->rowArray[right]>=blockStart) {        
+        while (left<=right) {
+            int mid = (left+right) / 2;
+            if (matrix->rowArray[mid] <= blockStart) {
+                row = mid;                    
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+    }
+    blockDivision[blockIdx.x]=row;
+}
+
 //SpMV multiplication algorithm used for checking the results. 
 void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     output->size=matrix->rowSize;  
@@ -100,13 +127,15 @@ int main(int argc, char** argv) {
         return MISSING_MATRIX_INPUT_ERROR;
     }
 
-    //verify the arguments for the blocks and threads allocation  
+    //verify the arguments for the blocks and threads allocation 
+    bool custom_settings=false; 
     int blocks=DEFAULT_BLOCKS_NUMBER;
     int threads=DEFAULT_THREADS_NUMBER;
     for (int i=2;i<argc;i++) {
         if (strcmp(argv[i],"-b")==0 && (i+1)<argc) {
             i++;
             blocks=atoi(argv[i]);
+            custom_settings=true;
             continue;
         }
         if (strcmp(argv[i],"-t")==0 && (i+1)<argc) {
@@ -115,10 +144,11 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (threads<0 || blocks<0) {
+    if (threads<=0 || blocks<=0) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
+    
     printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
 
     //Creating matrix structure and opening the file
@@ -179,7 +209,18 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error during output vector creation: %s\n",cudaGetErrorString(cudaResult));
         return cudaResult;
     }
-
+    float* buffer=NULL;
+    cudaResult=cudaMallocManaged((void**)&buffer, matrix->notNull*sizeof(float));
+        if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during buffer vector creation: %s\n",cudaGetErrorString(cudaResult));
+        return cudaResult;
+    }
+    unsigned int* blockDivision;
+    cudaResult=cudaMallocManaged((void**)&blockDivision, (blocks+1)*sizeof(unsigned int));
+        if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during buffer vector creation: %s\n",cudaGetErrorString(cudaResult));
+        return cudaResult;
+    }
     //preloading all structures in the global memory 
     printf("copying data in the CUDA memory... \n");
     
@@ -209,11 +250,15 @@ int main(int argc, char** argv) {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     
+    if (!custom_settings) {
+        blocks=matrix->notNull/BLOCK_PER_NOT_NULL;
+    }
+
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         if (i>=0) cudaEventRecord(start);
-        vmcsr_mul<<<blocks,threads,SHARED_MEMORY_DIM>>>(output,matrix,vector);
+        vmcsr_div<<<blocks,1>>>(matrix,blockDivision);
         
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
@@ -224,6 +269,21 @@ int main(int argc, char** argv) {
         }
         if (i>=0) {
             cudaEventElapsedTime(&times[i], start,stop);
+        }
+        if (i>=0) cudaEventRecord(start);
+        vmcsr_mul<<<blocks,threads,sizeof(unsigned int)>>>(output,matrix,vector,blockDivision);
+        
+        if (i>=0) cudaEventRecord(stop);
+        cudaResult=cudaEventSynchronize(stop); 
+        
+        if (cudaResult != cudaSuccess) {
+            fprintf(stderr, "Error during kernel execution: %s\n", cudaGetErrorString(cudaResult));
+            return cudaResult;
+        }
+        if (i>=0) {
+            float time=times[i];
+            cudaEventElapsedTime(&times[i], start,stop);
+            times[i]+=time;
             printf("iteration %d took %f ms\n",i,times[i]);
         }
     }
@@ -246,8 +306,13 @@ int main(int argc, char** argv) {
     vmcsr_mul_sequential(outputSequential,matrix,vector);
     int mismatches=0;
     float maxEpsilon=0;
+    bool one=false;
     for (int i=0;i<output->size;i++) {
         if (output->dataArray[i] != outputSequential->dataArray[i]) {
+            if (!one) {
+                printf("Mismatch on %d\n",i);
+                one=true;
+            }
             mismatches++;
             float epsilon=fabs(output->dataArray[i] - outputSequential->dataArray[i]);
             if (maxEpsilon<epsilon) maxEpsilon=epsilon;
