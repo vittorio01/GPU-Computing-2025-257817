@@ -13,10 +13,9 @@
 #define WARMUP_CYCLES 5
 #define ITERATIONS 20
 
-#define DEFAULT_THREADS_NUMBER  256
+#define DEFAULT_THREADS_NUMBER  1
 #define DEFAULT_BLOCKS_NUMBER   1
-
-#define NOT_NULL_PER_BLOCK      3328
+#define SHARED_MEMORY_DIM   4
 
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
@@ -28,81 +27,39 @@ This time for each block the respective threads contends the next pending row in
 3- If the readed value is valid (not greather that the rows to process per block) each thread performs the SpMV like the first algorithm, saves the result
    and jumps to the step 2.
 */
-__inline__ __device__ float reduceSum(float value) {
-    value += __shfl_down_sync(0xFFFFFFFF, value , 16);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 8);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 4);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 2);
-    value += __shfl_down_sync(0xFFFFFFFF, value , 1);
-    return value;
-}
 
-
-__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input,unsigned int* blockDivision) {
-    float* __restrict__ cachedInput=input->dataArray;
-    unsigned short laneId = threadIdx.x % warpSize;  
-    
-    extern __shared__ unsigned int nextPendingRow[];
+__global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input) {
+    extern __shared__ int sharedMemory[];
+    int* nextPendingRow=sharedMemory;
 
     //row vector division in block subspaces
-    unsigned int blockStart=blockDivision[blockIdx.x];
-    unsigned int blockEnd=blockDivision[blockIdx.x+1];
+    int rowsPerBlock = (matrix->rowSize + gridDim.x - 1) / gridDim.x;
+    int blockStart = blockIdx.x * rowsPerBlock;
+    int blockEnd = min(blockStart + rowsPerBlock, matrix->rowSize);
+    rowsPerBlock=blockEnd-blockStart;
+    
+    if (rowsPerBlock == 0) return;
 
     //Next pending row value initialized to 0
     if (threadIdx.x==0) *nextPendingRow=0;
     __syncthreads();
-    unsigned int selectedRowIndex;
-    if (laneId==0) {
-        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-    }
-    selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
 
-    while(selectedRowIndex<blockEnd) {
+    int selectedRowIndex;
+    while(true) {
+        //each thread reads and increments the next pending row value.
+        selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
+        //checks if the row is still in the assigned block
+        if (selectedRowIndex>=blockEnd) break; 
+
+        //then process the row like first algorithm. 
         int startRow=matrix->rowArray[selectedRowIndex];
         int endRow=matrix->rowArray[selectedRowIndex+1];
         float acc = 0;
-        while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
-            startRow+=warpSize;
+        for (int i=startRow;i<endRow;i++) {
+            acc+=matrix->dataArray[i]*input->dataArray[matrix->colArray[i]];
         }
-        
-        acc=reduceSum(acc);
-        
-        if (laneId==0) {
-            output->dataArray[selectedRowIndex]=acc;
-            selectedRowIndex=atomicAdd(nextPendingRow,1)+blockStart;
-        }
-        selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
+        output->dataArray[selectedRowIndex]=acc;
     }
-}
-
-__global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {    
-    unsigned int elementsPerBlock = (matrix->notNull + gridDim.x - 1) / gridDim.x;
-    unsigned int blockStart = blockIdx.x * elementsPerBlock;
-    unsigned int blockEnd = min(blockStart + elementsPerBlock, matrix->notNull);
-
-    if(blockIdx.x==0) {
-        blockDivision[0]=0;
-        blockDivision[gridDim.x]=matrix->rowSize;
-        return;
-    }
-
-    int row=-1;
-    unsigned int left=0;
-    unsigned int right=matrix->rowSize;
-    if (matrix->rowArray[left]<=blockStart && matrix->rowArray[right]>=blockStart) {        
-        while (left<=right) {
-            int mid = (left+right) / 2;
-            if (matrix->rowArray[mid] <= blockStart) {
-                row = mid;                    
-                left = mid + 1;
-            } else {
-                right = mid - 1;
-            }
-        }
-    }
-    blockDivision[blockIdx.x]=row;
 }
 
 //SpMV multiplication algorithm used for checking the results. 
@@ -117,43 +74,6 @@ void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     }
 }
 
-typedef struct GPUMap {
-    unsigned int blocks;
-    unsigned int threads;
-    unsigned int shared;
-} GPUMap;
-
-GPUMap getAllocation(int device, unsigned int notNull, unsigned int customBlocks, unsigned int customThreads,bool custom) {
-    GPUMap map;
-    if (!custom) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, device);
-
-        int major = prop.major;
-        int minor = prop.minor;
-        int coresPerSM;
-        switch ((major << 4) + minor) {
-            case 0x50: coresPerSM = 128; break; // Maxwell
-            case 0x60: coresPerSM = 64; break;  // Pascal
-            case 0x70: coresPerSM = 64; break;  // Volta
-            case 0x75: coresPerSM = 64; break;  // Turing
-            case 0x80: coresPerSM = 64; break;  // Ampere (datacenter)
-            case 0x86: coresPerSM = 128; break; // Ampere
-            case 0x87: coresPerSM = 128; break; // RTX Axxx Mobile
-            case 0x89: coresPerSM = 128; break; // Ada Lovelace
-            default: coresPerSM = 64; break;
-        }
-        
-        map.threads=prop.sharedMemPerBlock/coresPerSM;
-        map.blocks=notNull/NOT_NULL_PER_BLOCK;
-    } else {
-        map.threads=customThreads;
-        map.blocks=customBlocks;   
-    }
-    map.shared=sizeof(unsigned int);
-    return map;
-}
-
 int main(int argc, char** argv) {
     //Data loading phase: the programs checks if there is a matrix, opens it using the datalib custom library and creates a vector for the multiplication
     if (argc < 2) {
@@ -161,28 +81,26 @@ int main(int argc, char** argv) {
         return MISSING_MATRIX_INPUT_ERROR;
     }
 
-    //verify the arguments for the blocks and threads allocation 
-    bool custom_settings=false; 
+    //verify the arguments for the blocks and threads allocation  
     int blocks=DEFAULT_BLOCKS_NUMBER;
     int threads=DEFAULT_THREADS_NUMBER;
     for (int i=2;i<argc;i++) {
         if (strcmp(argv[i],"-b")==0 && (i+1)<argc) {
             i++;
             blocks=atoi(argv[i]);
-            custom_settings=true;
             continue;
         }
         if (strcmp(argv[i],"-t")==0 && (i+1)<argc) {
             i++;
             threads=atoi(argv[i]);
-            custom_settings=true;
         }
     }
 
-    if (threads<=0 || blocks<=0) {
+    if (threads<0 || blocks<0) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
+    printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
 
     //Creating matrix structure and opening the file
     SparseMatrix* matrix=NULL;
@@ -203,7 +121,7 @@ int main(int argc, char** argv) {
         return COL_ARRAY_NOT_VALID;
 
         case MEMORY_ALLOCATION_ERROR:
-        printf("Error during matrix reading phase: errothreadsr during memory allocation\n");
+        printf("Error during matrix reading phase: error during memory allocation\n");
         return MEMORY_ALLOCATION_ERROR;
 
         case DATA_ARRAY_NOT_VALID:
@@ -242,18 +160,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error during output vector creation: %s\n",cudaGetErrorString(cudaResult));
         return cudaResult;
     }
-    float* buffer=NULL;
-    cudaResult=cudaMallocManaged((void**)&buffer, matrix->notNull*sizeof(float));
-        if (cudaResult != cudaSuccess) {
-        fprintf(stderr, "Error during buffer vector creation: %s\n",cudaGetErrorString(cudaResult));
-        return cudaResult;
-    }
-    unsigned int* blockDivision;
-    cudaResult=cudaMallocManaged((void**)&blockDivision, (blocks+1)*sizeof(unsigned int));
-        if (cudaResult != cudaSuccess) {
-        fprintf(stderr, "Error during buffer vector creation: %s\n",cudaGetErrorString(cudaResult));
-        return cudaResult;
-    }
+
     //preloading all structures in the global memory 
     printf("copying data in the CUDA memory... \n");
     
@@ -275,12 +182,8 @@ int main(int argc, char** argv) {
         return cudaResult;
     }
 
-    //Getting the allocation of blocks, threads and shared per block
 
-    GPUMap allocation=getAllocation(currentDevice,matrix->notNull,blocks,threads,custom_settings);
-    printf("The algorithm will launch with %d blocks, %d threads, %d shared memory per block\n",allocation.blocks,allocation.threads,allocation.shared);
-    
-    //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
+     //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
     printf("performing matrix to vector multiplication...\n");
     
     cudaEvent_t start, stop;
@@ -291,7 +194,7 @@ int main(int argc, char** argv) {
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         if (i>=0) cudaEventRecord(start);
-        vmcsr_div<<<allocation.blocks,1>>>(matrix,blockDivision);
+        vmcsr_mul<<<blocks,threads,SHARED_MEMORY_DIM>>>(output,matrix,vector);
         
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
@@ -302,22 +205,6 @@ int main(int argc, char** argv) {
         }
         if (i>=0) {
             cudaEventElapsedTime(&times[i], start,stop);
-        }
-        if (i>=0) cudaEventRecord(start);
-
-        vmcsr_mul<<<allocation.blocks,allocation.threads,allocation.shared>>>(output,matrix,vector,blockDivision);
-        
-        if (i>=0) cudaEventRecord(stop);
-        cudaResult=cudaEventSynchronize(stop); 
-        
-        if (cudaResult != cudaSuccess) {
-            fprintf(stderr, "Error during kernel execution: %s\n", cudaGetErrorString(cudaResult));
-            return cudaResult;
-        }
-        if (i>=0) {
-            float time=times[i];
-            cudaEventElapsedTime(&times[i], start,stop);
-            times[i]+=time;
             printf("iteration %d took %f ms\n",i,times[i]);
         }
     }
@@ -340,13 +227,8 @@ int main(int argc, char** argv) {
     vmcsr_mul_sequential(outputSequential,matrix,vector);
     int mismatches=0;
     float maxEpsilon=0;
-    bool one=false;
     for (int i=0;i<output->size;i++) {
         if (output->dataArray[i] != outputSequential->dataArray[i]) {
-            if (!one) {
-                printf("Mismatch on %d\n",i);
-                one=true;
-            }
             mismatches++;
             float epsilon=fabs(output->dataArray[i] - outputSequential->dataArray[i]);
             if (maxEpsilon<epsilon) maxEpsilon=epsilon;
@@ -372,3 +254,4 @@ int main(int argc, char** argv) {
     
     return 0;
 }   
+

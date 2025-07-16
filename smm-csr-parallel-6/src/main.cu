@@ -18,11 +18,11 @@
 #define DEFAULT_THREADS_NUMBER  256
 #define DEFAULT_BLOCKS_NUMBER   1
 
-#define SHARED_PER_THREAD       13
+#define SHARED_PER_THREAD       14
 #define SHARED_BUFFER_SIZE      SHARED_PER_THREAD
 #define SHARED_MEMORY_DIM       (SHARED_BUFFER_SIZE*sizeof(float))
 
-#define BLOCK_PER_NOT_NULL      3200
+#define NOT_NULL_PER_BLOCK      3328
 
 __inline__ __device__ float reduceSum(float value) {
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
@@ -139,6 +139,43 @@ void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     }
 }
 
+typedef struct GPUMap {
+    unsigned int blocks;
+    unsigned int threads;
+    unsigned int shared;
+} GPUMap;
+
+GPUMap getAllocation(int device, unsigned int notNull, unsigned int customBlocks, unsigned int customThreads,bool custom) {
+    GPUMap map;
+    if (!custom) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, device);
+
+        int major = prop.major;
+        int minor = prop.minor;
+        int coresPerSM;
+        switch ((major << 4) + minor) {
+            case 0x50: coresPerSM = 128; break; // Maxwell
+            case 0x60: coresPerSM = 64; break;  // Pascal
+            case 0x70: coresPerSM = 64; break;  // Volta
+            case 0x75: coresPerSM = 64; break;  // Turing
+            case 0x80: coresPerSM = 64; break;  // Ampere (datacenter)
+            case 0x86: coresPerSM = 128; break; // Ampere
+            case 0x87: coresPerSM = 128; break; // RTX Axxx Mobile
+            case 0x89: coresPerSM = 128; break; // Ada Lovelace
+            default: coresPerSM = 64; break;
+        }
+        
+        map.threads=prop.sharedMemPerBlock/coresPerSM;
+        map.blocks=notNull/NOT_NULL_PER_BLOCK;
+    } else {
+        map.threads=customThreads;
+        map.blocks=customBlocks;   
+    }
+    map.shared=(SHARED_PER_THREAD*map.threads*sizeof(float))+(sizeof(float)*map.threads)+(sizeof(unsigned int)*map.threads);
+    return map;
+}
+
 int main(int argc, char** argv) {
     //Data loading phase: the programs checks if there is a matrix, opens it using the datalib custom library and creates a vector for the multiplication
     if (argc < 2) {
@@ -160,6 +197,7 @@ int main(int argc, char** argv) {
         if (strcmp(argv[i],"-t")==0 && (i+1)<argc) {
             i++;
             threads=atoi(argv[i]);
+            custom_settings=true;
         }
     }
 
@@ -167,8 +205,6 @@ int main(int argc, char** argv) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
-    
-    printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
 
     //Creating matrix structure and opening the file
     SparseMatrix* matrix=NULL;
@@ -261,23 +297,23 @@ int main(int argc, char** argv) {
         return cudaResult;
     }
 
+    //Getting the allocation of blocks, threads and shared per block
 
-     //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
+    GPUMap allocation=getAllocation(currentDevice,matrix->notNull,blocks,threads,custom_settings);
+    printf("The algorithm will launch with %d blocks, %d threads, %d shared memory per block\n",allocation.blocks,allocation.threads,allocation.shared);
+    
+    //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
     printf("performing matrix to vector multiplication...\n");
     
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     
-    if (!custom_settings) {
-        blocks=matrix->notNull/BLOCK_PER_NOT_NULL;
-    }
-
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
         if (i>=0) cudaEventRecord(start);
-        vmcsr_div<<<blocks,1>>>(matrix,blockDivision);
+        vmcsr_div<<<allocation.blocks,1>>>(matrix,blockDivision);
         
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
@@ -290,8 +326,8 @@ int main(int argc, char** argv) {
             cudaEventElapsedTime(&times[i], start,stop);
         }
         if (i>=0) cudaEventRecord(start);
-        unsigned int sharedDim=(SHARED_PER_THREAD*threads*sizeof(float))+(sizeof(float)*threads)+(sizeof(unsigned int)*threads);
-        vmcsr_mul<<<blocks,threads,sharedDim>>>(output,matrix,vector,blockDivision);
+
+        vmcsr_mul<<<allocation.blocks,allocation.threads,allocation.shared>>>(output,matrix,vector,blockDivision);
         
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 

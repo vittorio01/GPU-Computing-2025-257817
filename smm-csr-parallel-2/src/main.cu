@@ -17,6 +17,8 @@
 #define DEFAULT_BLOCKS_NUMBER   1
 #define SHARED_MEMORY_DIM   4
 
+#define ROWS_PER_BLOCK  3328
+
 /*
 Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
 
@@ -74,6 +76,43 @@ void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     }
 }
 
+typedef struct GPUMap {
+    unsigned int blocks;
+    unsigned int threads;
+    unsigned int shared;
+} GPUMap;
+
+GPUMap getAllocation(int device, unsigned int notNull, unsigned int customBlocks, unsigned int customThreads,bool custom) {
+    GPUMap map;
+    if (!custom) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, device);
+
+        int major = prop.major;
+        int minor = prop.minor;
+        int coresPerSM;
+        switch ((major << 4) + minor) {
+            case 0x50: coresPerSM = 128; break; // Maxwell
+            case 0x60: coresPerSM = 64; break;  // Pascal
+            case 0x70: coresPerSM = 64; break;  // Volta
+            case 0x75: coresPerSM = 64; break;  // Turing
+            case 0x80: coresPerSM = 64; break;  // Ampere (datacenter)
+            case 0x86: coresPerSM = 128; break; // Ampere
+            case 0x87: coresPerSM = 128; break; // RTX Axxx Mobile
+            case 0x89: coresPerSM = 128; break; // Ada Lovelace
+            default: coresPerSM = 64; break;
+        }
+        
+        map.threads=prop.sharedMemPerBlock/coresPerSM;
+        map.blocks=notNull/ROWS_PER_BLOCK;
+    } else {
+        map.threads=customThreads;
+        map.blocks=customBlocks;   
+    }
+    map.shared=sizeof(unsigned int);
+    return map;
+}
+
 int main(int argc, char** argv) {
     //Data loading phase: the programs checks if there is a matrix, opens it using the datalib custom library and creates a vector for the multiplication
     if (argc < 2) {
@@ -81,26 +120,28 @@ int main(int argc, char** argv) {
         return MISSING_MATRIX_INPUT_ERROR;
     }
 
-    //verify the arguments for the blocks and threads allocation  
+    //verify the arguments for the blocks and threads allocation 
+    bool custom_settings=false; 
     int blocks=DEFAULT_BLOCKS_NUMBER;
     int threads=DEFAULT_THREADS_NUMBER;
     for (int i=2;i<argc;i++) {
         if (strcmp(argv[i],"-b")==0 && (i+1)<argc) {
             i++;
             blocks=atoi(argv[i]);
+            custom_settings=true;
             continue;
         }
         if (strcmp(argv[i],"-t")==0 && (i+1)<argc) {
             i++;
             threads=atoi(argv[i]);
+            custom_settings=true;
         }
     }
 
-    if (threads<0 || blocks<0) {
+    if (threads<=0 || blocks<=0) {
         printf("Invalid format of the blocks/threads organization: %d blocks, %d threads\n",blocks,threads);
         return 1;
     }
-    printf("Launching algorithm with %d blocks and %d threads on matrix %s\n",blocks,threads,argv[1]);
 
     //Creating matrix structure and opening the file
     SparseMatrix* matrix=NULL;
@@ -121,7 +162,7 @@ int main(int argc, char** argv) {
         return COL_ARRAY_NOT_VALID;
 
         case MEMORY_ALLOCATION_ERROR:
-        printf("Error during matrix reading phase: error during memory allocation\n");
+        printf("Error during matrix reading phase: errothreadsr during memory allocation\n");
         return MEMORY_ALLOCATION_ERROR;
 
         case DATA_ARRAY_NOT_VALID:
@@ -160,7 +201,12 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error during output vector creation: %s\n",cudaGetErrorString(cudaResult));
         return cudaResult;
     }
-
+    float* buffer=NULL;
+    cudaResult=cudaMallocManaged((void**)&buffer, matrix->notNull*sizeof(float));
+        if (cudaResult != cudaSuccess) {
+        fprintf(stderr, "Error during buffer vector creation: %s\n",cudaGetErrorString(cudaResult));
+        return cudaResult;
+    }
     //preloading all structures in the global memory 
     printf("copying data in the CUDA memory... \n");
     
@@ -182,8 +228,12 @@ int main(int argc, char** argv) {
         return cudaResult;
     }
 
+    //Getting the allocation of blocks, threads and shared per block
 
-     //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
+    GPUMap allocation=getAllocation(currentDevice,matrix->notNull,blocks,threads,custom_settings);
+    printf("The algorithm will launch with %d blocks, %d threads, %d shared memory per block\n",allocation.blocks,allocation.threads,allocation.shared);
+    
+    //Benchmarking phase: Using the function cudaEventRecord to measure the time used by the algorithm
     printf("performing matrix to vector multiplication...\n");
     
     cudaEvent_t start, stop;
@@ -193,8 +243,12 @@ int main(int argc, char** argv) {
     float times[ITERATIONS];
     
     for (int i=-WARMUP_CYCLES;i<ITERATIONS;i++) {
+        if (i>=0) {
+            cudaEventElapsedTime(&times[i], start,stop);
+        }
         if (i>=0) cudaEventRecord(start);
-        vmcsr_mul<<<blocks,threads,SHARED_MEMORY_DIM>>>(output,matrix,vector);
+
+        vmcsr_mul<<<allocation.blocks,allocation.threads,allocation.shared>>>(output,matrix,vector);
         
         if (i>=0) cudaEventRecord(stop);
         cudaResult=cudaEventSynchronize(stop); 
@@ -227,8 +281,13 @@ int main(int argc, char** argv) {
     vmcsr_mul_sequential(outputSequential,matrix,vector);
     int mismatches=0;
     float maxEpsilon=0;
+    bool one=false;
     for (int i=0;i<output->size;i++) {
         if (output->dataArray[i] != outputSequential->dataArray[i]) {
+            if (!one) {
+                printf("Mismatch on %d\n",i);
+                one=true;
+            }
             mismatches++;
             float epsilon=fabs(output->dataArray[i] - outputSequential->dataArray[i]);
             if (maxEpsilon<epsilon) maxEpsilon=epsilon;
@@ -254,4 +313,3 @@ int main(int argc, char** argv) {
     
     return 0;
 }   
-
