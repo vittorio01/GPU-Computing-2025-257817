@@ -47,13 +47,10 @@ on GPUs rather than sequential solution for CPUs.
 
 \section{Problem Statement}
 In the SpVM multiplication we consider a matrix coded in a sparse format (in this case the CSR format) and an input vector that has the same size of its columns number. 
-
+\\
 Each elements of the resulting vector is computed by performing the dot products of each not null elements of the matrix with the input vector and accumulating them in the corresponding row position.
-At this point the main objectives are:
-\begin{enumerate}
-    \item Create a first sequential algorithm that performs the same operation on a sparse CSR matrix.
-    \item Parallelize the first CPU implementation with CUDA and compare them in terms of performances and resurces utilization. 
-\end{enumerate}
+\\
+The main objective of this report is to propose a common solution for the SpMV for CUDA devices and propose more advanced optimizations techniques to improve the overall performances.
 
 \subsection{Storage Format}
 The CSR for sparse matrices is a storage format that involves three different arrays to represent the information: 
@@ -76,27 +73,74 @@ The CUDA language model permits to run a kernel on different concurrent threads,
 
 To improve the performance and the organization of the parallel algorithms, CUDA architectures provides:
 \begin{itemize}
-    \item {\it{Warp organization}}, where groups of 32 threads can synchronize and dhare data using predefined function for reductions.
-    \item {\it{Block organization}}, where more warps can syncronize themself using atomic operations, barriers and shared memory.
-    \item {\it{Shared memory}}, which is divided in more blocks and used to improve data reusage, optimize the global memory transfers and other purposes. 
-    \item {\it{Read only cache}}, which is a L1 read only cache that can be assigned by the programmer for improving data transfer for casual and repetitive accesses. 
+    \item {\it{Warp organization}}, where groups of 32 threads are able synchronize and share data using predefined functions.
+    \item {\it{Block organization}}, where more warps can syncronize themself using atomic operations, barriers and have access to a dedicated shared memory.
+    \item {\it{Shared memory}}, which is a fast but limited memory divided in more blocks and used to improve data reusage, optimize the global memory transfers and other purposes. 
+    \item {\it{Read only cache}}, which is a L1 read only cache that can be assigned by the programmer with the $\_\_ldg()$ function to improve data transfer for casual and repetitive accesses. 
 \end{itemize}
 
-\section{State of the Art}
-There already are multiple c++ libraries that performs CSR SpMV multiplications like:
-\begin{itemize}
-    \item cuSPARSE\cite{cuSPARSE}, the official library supported by Nvidia that can perform multiplication between matrices and vectors in different formats with CUDA. 
-    \item Ginkgo\cite{ginkgo}, like MAGMA offers high-performance solution for multicore linear algebra algorithms for different platforms.
-\end{itemize}
+\subsection{Warp reduction}
+In CUDA architectures there are predefined mechanisms to allow threads in the same warp to exchange data. The function $\_\_shfl\_down\_sync()$ permit to perform a reduction of arrays with maximum length of 32.
+For example, the function $reduceSum(acc)$ uses five shuffle functions to accumulate all contribution given by threads in the same warp on the thread 0. 
+
+\begin{algorithm}[h]
+\caption{Warp reduction system}
+\begin{algorithmic}[1]
+\Procedure{reduceSum}{acc}
+\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,16)$
+\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,8)$
+\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,4)$
+\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,2)$
+\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,1)$
+\EndProcedure
+\end{algorithmic}
+\label{alg:reduceSum}
+\end{algorithm}
+\subsection{Ceiling division}
+The ceiling division is a system used to divide almost equally N elements across C equal size cells:
+\begin{equation}
+cellSize=\frac{N + C - 1}{C}
+\label{eq:ceiling}
+\end{equation}
+From the obtained division, the {\it{start point}} and the {\it{end point}} for each cell are defined by:
+\begin{equation}
+start=cellSize*cId
+\end{equation}
+\begin{equation}
+end=min(start+cellSize,N)
+\end{equation}
+
+\subsection{Binary Search}
+The binary search is an algorithm that finds the position of a certain element in a sorted array with a logarithmic complexity $O(log(n))$. The proposed kernels use a modified version 
+of the original algorithm to identify the position of the element nearest but lower or equal than the given value.  
+\begin{algorithm}[h]
+\caption{Adapted binary search}
+\begin{algorithmic}[1]
+\Procedure{binarySearch}{array,size,element}
+\State $index=-1,\ left=0\ right=size$
+\While{$left<=right$}
+\State $mid=(left+right)/2$
+\If {$array[mid]<=value$}
+\State $index=mid$
+\State $left=mid+1$
+\Else 
+\State $right=mid-1$
+\EndIf
+\EndWhile
+\EndProcedure
+\end{algorithmic}
+\label{alg:binarySearch}
+\end{algorithm}
+
 \section{Methodology and Contributions}\label{sec:methodology}
 
-\subsection{Dynamic algorithm}
-To reduce the unbalance 
+\subsection{Dynamic algorithm (Parallel-2)}
+In the first dynamic algorithm, the matrix and the vector are processed using a row based algorithm that assigns a thread for each row:
 \begin{enumerate}
-    \item The row array is splitted in equal subsection for different blocks using again the ceiling division. 
-    \item For each block a variable in the shared memory $pendingRow$ is initialized and used to contain the next row number that is waiting for the assignment. 
-    \item Each thread uses the function $atomicAdd(pendingRow,1)$ to increment the value of $pendingRow$ and, at the same time, read its content
-    \item Using the value obtained each thread computes the products and the accumulation of the entire row and repeats step 3 and 4 until the block reach the end of its subsection. 
+    \item The {\it{rowArray}} is splitted in equal subsection for different blocks using the ceiling division (\ref{eq:ceiling}). 
+    \item For each block a variable in the shared memory $pendingRow$ is initialized to 0 and used to contain the next row number that is waiting to be processed. 
+    \item Each thread uses the function $atomicAdd(pendingRow,1)$ to increment the value of $pendingRow$ and, at the same time, read its content.
+    \item Using the value obtained, each thread computes the products and the accumulation of the entire row, saves the result in the output array and repeats step 3 and 4 until the block reach the end of its subsection. 
 \end{enumerate}
 
 \begin{algorithm}[h!]
@@ -105,91 +149,53 @@ To reduce the unbalance
 \begin{algorithmic}[1]
 \Procedure{vmcsrMul}{$output$, $matrix$, $input$}
 \State $blockStart,blockEnd$ \Comment{Ceiling division}
-\State $pendingRow=0$ \Comment(only thread 0);
-\State $syncthreads()$
-\While {${true}$}
-\State $pendingRow=atomicAdd(pendingRow,1)$
-\State $+blockStart$
-\If {$pendingRow>blockEnd$} \Return \EndIf
-\State $startRow=matrix.rowArray[pendingRow]$
-\State $endRow=matrix.rowArray[pendingRow+1]$
+\State $pendingRow\leftarrow0$ \Comment(only thread 0);
+\State $row=atomicAdd(pendingRow,1)+blockStart$
+\While {$row<blockEnd$}
+\State $startRow,endRow$
+\State $\ \ \uparrow rowArray[row],rowArray[row+1]$
 \State $acc=0$
 \While{${startRow<endRow}$}
-\State $col=matrix.colArray[startRow]$
+\State $col=colArray[startRow]$
 \State $acc+=$
-\State $matrix.dataArray[startRow]$
-\State $\ \ *input.dataArray[col]$
+\State $\ dataArray[startRow]*input[col]$
 \State $startRow++$
 \EndWhile
-\State $output.dataArray[pendingRow]=acc$
+\State $output[row]=acc$
+\State $row=atomicAdd(pendingRow,1)$
+\State $\ \ +blockStart$
 \EndWhile
 \EndProcedure
 \end{algorithmic}
 \label{alg:dynamic1}
 \end{algorithm}
 
-This dynamic assignment for threads in the same block implemented in the algorithm \ref{alg:parallel2} tries to mitigate the unbalanced workload introduced in some rows. 
-In facts, if some thread spend too much time when computing a single row, other available threads may perform also rows that in a static division should be reserved for others.  
-
-\subsection{Optimized Dynamic algorithm}
+\subsection{Optimized Dynamic algorithm (Parallel-5)}
 The dynamic algorithm can be improved further using a better organization of workload between threads. More performance can then be obtained by:
 \begin{itemize}
-    \item Dividing the workload between blocks using an approach based on the number of not null elements instead the rows. To achieve this, the ceiling division can be performed on the not null array instead on the row array and a binary search can be performed to find the relative rows boundaries. 
-    \item Assigning a warp for each row instead a single thread. In this way, because 32 threads are assigned per row, longer rows can be processed in shorter time and the partials obtained by threads in the same row can be reduced using more {$\_\_shfl\_down\_sync$} functions.
-    \item Assigning the read only cache on the input vector to improve the speed of the algorithm by leveraging on the data reusage.
+    \item {\it{Using the binary search}} in a preliminar kernel (\ref{alg:blockDivisionKernel}) to assign the rows to each block in base of the number of not-null elements of the matrix.
+    \item Instead a single thread, {\it{Assigning a warp for each row}}. In this way, the threads in the warp process 32 partials from very long rows that can per reduced using the {\it{reduceSum}}(\ref{alg:reduceSum}).
+    \item Assigning the read only cache on the input vector to improve the speed by leveraging on the data reusage.
 \end{itemize}
 
-\begin{algorithm}[h!]
-\caption{Kernel used for the preliminar block division. The kernel is launched with the same number of blocks of the main kernel \ref{alg:dynamic2} but only one thread per block.}
-\algorithmicrequire~ matrix structure and the preinitialized blockDivision array on the GPU's global memory.
-\begin{algorithmic}[1]
-\Procedure{vmcsrDiv}{$matrix$, $blockDivision$}
-\State $blockStart,blockEnd$ \Comment{Ceiling division on the not null element's array}
-\State \text{\dots}\Comment{output vector initialization phase}
-\If{$blockIdx.x==0$}
-\State $blockDivision[0]=0$
-\State $blockSivision[blockDim.x-1]=rowSize$
-\State $\textbf{return}$
-\EndIf
-\State $row=-1$
-\State $left=0$
-\State $right=rowSize$
-\While{$left<=right$}
-\State $mid=(left+right)/2$
-\If{rowArray[mid]<=blockStart}
-\State $row=mid$
-\State $left=mid+1$
-\Else 
-\State $right=mid-1$
-\EndIf
-\EndWhile
-\State $blockDivision[blockIdx.x]=row$
-\EndProcedure
-\end{algorithmic}
-\label{alg:binary_search}
-\end{algorithm}
-
-\begin{algorithm}[h!]
-\caption{Optimized dynamic algorithm}
+\begin{algorithm}[h]
+\caption{Optimized dynamic algorithm (Parallel-5)}
 \algorithmicrequire~matrix structure, block division array, input vector and output vector structures.
 \begin{algorithmic}[1]
 \Procedure{vmcsrMul}{$output$, $matrix$, $input$, $blockDivision$}
-\State $blockStart=blockDivision[blockIdx.x]$
-\State $blockEnd=blockDivision[blockIdx.x+1]$
-\State $pendingRow=0$ \Comment(only thread 0);
-\State $syncthreads()$
+\State $blockStart,blockEnd$ \Comment{binary search kernel}
+\State $pendingRow\leftarrow0$ \Comment(only thread 0);
 \State $row=\underline{Row Election}$ 
 \While {$row<blockEnd$}
-\State $startRow=matrix.rowArray[row]$
-\State $endRow=matrix.rowArray[row+1]$
+\State $startRow,endRow$
+\State $\ \ \uparrow rowArray[row],rowArray[row+1]$
 \State $acc=0$
 \While{${startRow<endRow}$}
 \State $idx=min(startRow+laneId,endRow)$
-\State $col=matrix.colArray[idx]$
-\State $acc+=$
-\State $(matrix.dataArray[idx]$
-\State $\ *\_\_ldg(input.dataArray[col]))$
-\State $\ *(startRow+laneId<endRow)$
+\State $col=colArray[idx]$
+\State $acc+=fmaf($
+\State $\ \ dataArray[startRow],\_\_ldg(input[col])$
+\State $\ \ *(startRow+laneId<endRow))$
 \State $startRow++$
 \EndWhile
 \State $acc=\underline{ReduceSum}$
@@ -203,7 +209,7 @@ The dynamic algorithm can be improved further using a better organization of wor
 \label{alg:dynamic2}
 \end{algorithm}
 
-\begin{algorithm}[h!]
+\begin{algorithm}[h]
 \caption{Row election System}
 \begin{algorithmic}[1]
 \Procedure{RowElection}{}
@@ -217,37 +223,41 @@ The dynamic algorithm can be improved further using a better organization of wor
 \label{alg:rowElection}
 \end{algorithm}
 
-
-\begin{algorithm}[h!]
-\caption{Warp reduction system}
+\begin{algorithm}[h]
+\caption{Preliminar kernel}
+\algorithmicrequire~matrix structure, block division array initialized on global memory.
 \begin{algorithmic}[1]
-\Procedure{reduceSum}{acc}
-\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,16)$
-\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,8)$
-\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,4)$
-\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,2)$
-\State $acc=\_\_shfl\_down\_sync(0xffffffff,acc,1)$
+\Procedure{vmcsrDiv}{matrix,blockDivision} 
+\State $blockStart,blockEnd$ \Comment{Ceiling on notNull array}
+\If {$blockIdx.x==0$}
+\State $blockDivision[0]=0$
+\State $blockDivision[blockDim.x]=rowSize$
+\Else 
+\State $blockDivision[blockIdx.x]$
+\State $\ \uparrow \underline{binarySearch(rowArray,rowSize,blockStart)}$
+\EndIf
 \EndProcedure
 \end{algorithmic}
-\label{alg:reduceSum}
+\Comment{Kernel launched for row division based on binary search. The kernel should be launched with same number of block of the main kernel with size equal to 1 thread}
+\label{alg:blockDivisionKernel}
 \end{algorithm}
 
-\subsection{Shared cooperative algorithm}
-The algorithm \ref{alg:dynamic2} does not adds a significant improvement for heavily unbalanced matrices. Another approach that tries to handle also those cases uses the shared memory to contain three different buffers:
+
+\subsection{Shared cooperative algorithm (Parallel-6)}
+The algorithm {\it{parallel-5}} shows poor performances when considering heavily unbalanced matrices. Another approach that tries mitigate those cases divides the shared memory as a buffer where the workload is divided by threads in the same block:
 \begin{itemize}
-    \item {\it{sharedBuffer}}, a space used as buffer to contain the result of the multiplication between elements of the matrix and the input vector (each thread operates on around 14 elements).
-    \item {\it{loadedRows}}, a space of {$blockSize.x$} cells used as cache for parts of the CSR row vector (each threads loads one pointer).
-    \item {\it{rowsBuffer}}, a space of {$blockSize.x-1$} used for accumulating partials for a small amount of rows (almost each thread maintaines one cell). 
+    \item {\it{sharedBuffer}}, a space of size $B=blockSize.x*N$ used as buffer to contain the result of the multiplication between elements of the matrix and the input vector (each thread operates at max on $N$ elements).
+    \item {\it{loadedRows}}, a space of {$R=blockSize.x$} cells used as cache for parts of the CSR row vector (each threads loads one pointer).
+    \item {\it{rowsBuffer}}, a space of {$R-1$} cells used for accumulating partials for a small amount of rows (almost each thread maintaines one cell). 
 \end{itemize}
 Using these three different shared spaces, each block performs these steps:
 \begin{enumerate}
-    \item The entire block cooperates to prepare the shared memory for processing {$blockSize-1$} rows by initializing with zeroes the {\it{rowsBuffer}} space and loading the necessary CSR pointers from the row array in the {\it{loadedRows}} space.
-    \item All threads load a certain amount of the required elements from the matrix and the input vector in a fully coaleshed way, perform the products and save the result in {\it{sharedBuffer}}.
-    \item The loaded elements are divided then in equal strides strides and the threads perform binary searches on the {\it{loadedRows}} space to identify the correspondent rows of the first elements of the strides. Then the strides are reduced in partials and accumulated in the {\it{rowsBuffer}} using $atomicAdd()$.
-            In this phase, a thread can eventually operate in multiple rows.
-    \item The step 2 and 3 are performed until all not null elements of all rows' subset are processed.
-    \item Each threads stores one result from the {\it{rowsBuffer}} to the output vector in the global memory.
-    \item All steps from 1 to 5 are repeated until all rows of the matrix are processed. 
+    \item The entire block cooperates to {\it{prepare the shared memory}} for processing {$R-1$} rows by initializing with zeroes the {\it{rowsBuffer}} space and loading the necessary CSR pointers from the row array in the {\it{loadedRows}} space.
+    \item The threads {\it{load a block of elements}} (maximum $B$ elements) from the matrix and the input vector in a fully coalesced way, perform the multiplications and store the result in {\it{sharedBuffer}}.
+    \item The loaded elements {\it{are divided then in equal strides}} using the ceiling division (\ref{eq:ceiling}) where each thread performs a binary search on {\it{loadedRows}} space to identify the correspondent row index of the first elements of their strides. Then the strides are reduced in partials and accumulated in the {\it{rowsBuffer}} using $atomicAdd()$ in base of the correct row indexes.
+    \item The step 2 and 3 are performed until all necessary elements for the considered rows in {\it{loadedRows}} are processed.
+    \item {\it{Each threads stores one result}} from the {\it{rowsBuffer}} to the output vector in the global memory.
+    \item All steps from 1 to 5 are repeated until all the rows of the matrix are processed. 
 \end{enumerate}
 The procedure \ref{alg:shared1} shows a heavily simplified representation of the shared cooperative algorithm.
 \begin{algorithm}[h!]
@@ -257,18 +267,25 @@ The procedure \ref{alg:shared1} shows a heavily simplified representation of the
 \Procedure{vmcsrMul}{$output$, $matrix$, $input$, $blockDivision$}
 \State $blockStart, blockEnd$ \Comment(From binary search kernel).
 \State $sharedBuffer, rowsBuffer, loadedRows$
-\For{$(blockDim.x-1)\ \text{steps}\ \textbf{in} [blockStart,blockEnd]$}
-\If{$threadIdx.x\ \textbf{in}\ rows\ block$}
-\State {\underline{Row space initialization}}
+\For{$[0,(R-1)]\ \text{rows}\ \textbf{in} [blockStart,blockEnd]$}
+\If{$threadIdx.x\ <\ R$}
+\State $loadedRows[threadIdx.x]\leftarrow rowArray$
+\State $rowsBuffer[threadIdx.x]=0$
 \EndIf
-\For {$sharedBufferDim\ \text{steps}\ \textbf{in}\ \it{blockNotNulls}$}
-\State \underline{cooperative multiplication on shared buffer}
-\State \underline{Stride division of shared Buffer}
-\State \underline{Binary search of first lane element}
-\State \underline{Stride reduction}
+\For {$[0,B]\ \textbf{in}[loadedRows[0],loadedRows[R]$]}
+\For {$tId\ \textbf{in}\ [0,B], \textbf{coalesced}$}
+\State $sharedBuffer[tId] \leftarrow dataArray[tId]$
+\State $\ \ *\ \_\_ldg(input[colArray[tId]])$
 \EndFor
-\If{$threadIdx.x\ \textbf{in}\ rows\ block$}
-\State {\underline{Rows unloading to global}}
+\State $tStart,tEnd\leftarrow$ \underline{Ceiling on B}
+\State $row\leftarrow \underline{binarySearch\ (loadedRows,B,tStart)}$
+\For {$i\ \textbf{in} [tStart,tEnd]$}
+\State $row\leftarrow\underline{row\ adjusting}$
+\State $atomicAdd(rowsBuffer[row],i)$
+\EndFor
+\EndFor
+\If{$threadIdx.x\ <\ (R-1)$}
+\State $output\leftarrow\ rowsBuffer[threadIdx.x]$
 \EndIf
 \EndFor
 \EndProcedure
@@ -278,8 +295,8 @@ The procedure \ref{alg:shared1} shows a heavily simplified representation of the
 
 \section{System Description and Experimental Set-up}
 \subsection{Dataset description}
-A dataset composed by 6 matrices is used for testing and benchmark all four algorithms. These matrices containes a number of not null elements between 1 and 1,5 million of not null elements and they have different organization of the elements and dispersion that challenges the algorithms in different ways:
-The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suitesparse}, a website that contains sample matrices which can be used for benchmarking algorithms. 
+A dataset composed by 6 matrices is used for testing and benchmark all four algorithms. These matrices containes a number of not null elements between 1 and 1,5 million and they have different organization and dispersion that challenges the algorithms in different ways:
+The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suitesparse}, a website that contains sample matrices useful for benchmarking algorithms. 
 
 \begin{table}[h]
     \centering
@@ -303,40 +320,20 @@ The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suites
 \end{table}
 
 \subsection{System Description}
-The system used for the execution of the benchmarks is uses CUDA 12.3.2, GCC 11.5.0, and is composed by a Intel(R) Xeon(R) Silver 4214 CPU and A Nvidia A30 GPU.  
-
-\begin{table}[h]
-    \centering
-    \begin{adjustbox}{width=0.8\columnwidth}
-    \begin{tabular}{lll}
-    \toprule
-    \textbf{Characteristic} & \textbf{Value} & \textbf{Device}\\
-    \midrule
-    Global memory & 24 GB &  \multirow{5}{*}{\textbf{GPU: Nvidia A30}} \\
-    Theoretical BW & 933 GB/s \\
-    CUDA Cores & 10752 \\
-    SM Number & 108 \\
-    FP32 Performance & 10.3 TFLOPS \\
-    \midrule 
-    Cores number & 12 & \multirow{3}{*}{\textbf{CPU: Intel(R) Xeon(R) Silver 4214}} \\
-    Threads number & 24 \\
-    Clock speed & 2.2Ghz \\
-    \bottomrule
-    \end{tabular}
-    \end{adjustbox}
-    \vspace{1em}
-    \caption{Benchmark system specs}
-    \label{tab:benchmarkSystem}
-\end{table}
+The system used for the execution of the benchmarks uses CUDA 12.3.2 for compiling the source code, and is composed by a Intel(R) Xeon(R) Silver 4214 CPU and A Nvidia A30 GPU. The Nvidia A30 is based on Ampere architecture and has 56 Stream Multiprocessors with 96KB available shared memory per block.
+The maximum memory bandwidth is $933GB/s$ and the $FP32$ performance is of $10.32TFlops$ 
 
 \subsection{Experimental Set-up}
-The performance is measured using the execution time elapsed measured with $cudaEventRecord$ functions for CUDA algorithms. 
+The performance is measured using the value of GFlops obtained by the execution time elapsed measured with $cudaEventRecord$ functions for CUDA algorithms and considering also the DRAM troughput, Compute utilization and Shared memory efficiency. 
+\\
+The results obtained by the three kernels are then compared with the library cuSPARSE\cite{cuSPARSE}, the official library supported by Nvidia.
 \subsection{Block size estimation}
 The parameters used for launching the kernels are calculated empirically in base of the amount of shared memory available per block, the number of cuda cores per SM and the size of the input matrix. In particular:
 \begin{itemize}
-    \item The number of threads per block is equal to the number of CUDA cores per SM divided by the available shared memory per block in MB ($cores/sharedPerSM$).
-    \item The number of blocks is equal to the number of not null elements of the input matrix divided by a constant obtained empirically of around 3328 ($notNull/NotNullPerBlock$).
-    \item In the kernel \ref{alg:shared1}, the dimension of the shared memory is related on the number of elements that each thread should load in the {\it{sharedBuffer}} (the best performances are obtain for 14 elements per tread).
+    \item We choose the number of blocks equal to the number of not null elements of the input matrix divided by a constant obtained empirically of around 3328 ($notNull/NotNullPerBlock$).
+    \item In the kernel \ref{alg:shared1}, the dimension of the shared memory is related on the number of elements that each thread should load and the block dimension ($shared=(elementsPerThread+2)*blockDim*sizeof(float)$).
+    \item We can obtain the number of threads per block by considering $N$ block active at the same time in a Stream Multiprocessor, which is limited to the shared memory for the kernel {\it{parallel-6}}. In this case we consider the number of 
+            threads equal to $sharedPerSM (Kb)\div[N*(elementsPerThread+2)*sizeof(float)]$. From various benchmarks, the best performances are obtained when considering $N=2$ and $elementsPerThread=14$. For the kernels {\it{parallel-2}} and {\it{parallel-5}} the number of threads can also be fixed at a value of 512 or 256 to obtain stable performances.
 \end{itemize}
 \section{Experimental Benchmarks}
 The following tables shows the values of GFLOPs/s (\ref{tab:GFLOPS}) and effective bandwidth (\ref{tab:BW}) obtained from benchmarking on 256 blocks of 512 using float values. 
@@ -361,26 +358,7 @@ The figure \ref{fig:flops-graph} gives also a visualization of table \ref{tab:GF
     \caption{GFLOPs/s comparison between parallel and sequential implementations}
     \label{tab:GFLOPS}
 \end{table}
-\begin{table}[h]
-    \centering
-    \begin{adjustbox}{width=0.79\columnwidth}
-    \begin{tabular}{lllll}
-    \toprule
-    \textbf{Matrix} & \textbf{Parallel 1} & \textbf{Parallel 2} & \textbf{Parallel 3} \\
-    \midrule
-    dbir2 \cite{dbir2} & \textbf{932,56} & 870,66 & 212,49 \\
-    ex11 \cite{ex11} & 435,15 & \textbf{437} & 128,03  \\
-    language \cite{language} & 250,37 & \textbf{656,65} & 15,27 \\
-    Linux\_call\_graph \cite{linuxcallgraph}& 6,52 & 13,11 & \textbf{19,12} \\ 
-    nemeth24 \cite{nemeth24} & 263,8 & \textbf{305,51} & 102,18  \\
-    twotone \cite{twotone}& 292,8 & \textbf{241,75} & 31,03  \\
-    \bottomrule
-    \end{tabular}
-    \end{adjustbox}
-    \vspace{1em}
-    \caption{Bandwidth (GB/s) comparison between parallel implementations}
-    \label{tab:BW}
-\end{table}
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{images/GFLOP_s.png}
@@ -389,19 +367,7 @@ The figure \ref{fig:flops-graph} gives also a visualization of table \ref{tab:GF
 \end{figure}
 
 \section{Results and conclusion}
-The results indicates that:
-\begin{itemize}
-    \item The best situation is when the not null elements in the matrix are concentrated on the diagonal.
-    \item If the number of not null elements per row is almost uniform for each row in the matrix, the first and the second parallel algorithms give similar results. 
-    \item The second parallel algorithm behaves better in different situations than the others implementations thanks to its load distribution system.
-    \item The third parallel algorithm is more performant that the others only if the number of not null elements per row is very large and the dispersion of the matrix is high.
-\end{itemize}
-Also the block size affects the performances of the algorithms. In facts:
-\begin{itemize}
-    \item In the first implementation the block size does not affect much the performances because the static allocation of workload. 
-    \item In the second implementation a lower block size may reduce the concurrency on the assignment system of the rows. 
-    \item In the third implementation a block size that is much lower that the average number of not null elements per row is more convenient because reduces significantly the concurrency introducted when accumulating the result on the output vector. 
-\end{itemize}
+
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 

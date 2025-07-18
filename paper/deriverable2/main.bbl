@@ -20,16 +20,6 @@
 \providecommand{\BIBdecl}{\relax}
 \BIBdecl
 
-\bibitem{cuSPARSE}
-\BIBentryALTinterwordspacing
-NVIDIA. cusparse. [Online]. Available: \url{https://developer.nvidia.com/cusparse}
-\BIBentrySTDinterwordspacing
-
-\bibitem{ginkgo}
-\BIBentryALTinterwordspacing
-Ginkgo. [Online]. Available: \url{https://ginkgo-project.github.io}
-\BIBentrySTDinterwordspacing
-
 \bibitem{suitesparse}
 \BIBentryALTinterwordspacing
 U.~of~Florida. Suitesparse matrix collection. [Online]. Available: \url{https://sparse.tamu.edu/}
@@ -63,6 +53,11 @@ Nemeth. nemet24 matrix. [Online]. Available: \url{https://sparse.tamu.edu/Nemeth
 \bibitem{twotone}
 \BIBentryALTinterwordspacing
 ATandT. twotone matrix. [Online]. Available: \url{https://sparse.tamu.edu/ATandT/twotone}
+\BIBentrySTDinterwordspacing
+
+\bibitem{cuSPARSE}
+\BIBentryALTinterwordspacing
+NVIDIA. cusparse. [Online]. Available: \url{https://developer.nvidia.com/cusparse}
 \BIBentrySTDinterwordspacing
 
 \end{thebibliography}
