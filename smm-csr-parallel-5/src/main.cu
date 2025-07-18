@@ -90,16 +90,14 @@ __global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {
 
     int row=-1;
     unsigned int left=0;
-    unsigned int right=matrix->rowSize;
-    if (matrix->rowArray[left]<=blockStart && matrix->rowArray[right]>=blockStart) {        
-        while (left<=right) {
-            int mid = (left+right) / 2;
-            if (matrix->rowArray[mid] <= blockStart) {
-                row = mid;                    
-                left = mid + 1;
-            } else {
-                right = mid - 1;
-            }
+    unsigned int right=matrix->rowSize;      
+    while (left<=right) {
+        int mid = (left+right) / 2;
+        if (matrix->rowArray[mid] <= blockStart) {
+            row = mid;                    
+            left = mid + 1;
+        } else {
+            right = mid - 1;
         }
     }
     blockDivision[blockIdx.x]=row;

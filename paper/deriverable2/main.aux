@@ -1,0 +1,77 @@
+\relax 
+\citation{cuSPARSE}
+\citation{ginkgo}
+\providecommand \oddpage@label [2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Problem Statement}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Storage Format}{1}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Data organization in CSR structure}}{1}{}\protected@file@percent }
+\newlabel{fig:csr-format}{{1}{1}{}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Parallelization}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}State of the Art}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Methodology and Contributions}{2}{}\protected@file@percent }
+\newlabel{sec:methodology}{{IV}{2}{}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Dynamic algorithm}{2}{}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Dynamic SpVM algorithm}}{2}{}\protected@file@percent }
+\newlabel{alg:dynamic1}{{1}{2}{}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Optimized Dynamic algorithm}{2}{}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Kernel used for the preliminar block division. The kernel is launched with the same number of blocks of the main kernel \ref {alg:dynamic2} but only one thread per block.}}{2}{}\protected@file@percent }
+\newlabel{alg:binary_search}{{2}{2}{}{algorithm.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Shared cooperative algorithm}{2}{}\protected@file@percent }
+\citation{suitesparse}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {3}{\ignorespaces Optimized dynamic algorithm}}{3}{}\protected@file@percent }
+\newlabel{alg:dynamic2}{{3}{3}{}{algorithm.3}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {4}{\ignorespaces Row election System}}{3}{}\protected@file@percent }
+\newlabel{alg:rowElection}{{4}{3}{}{algorithm.4}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {5}{\ignorespaces Warp reduction system}}{3}{}\protected@file@percent }
+\newlabel{alg:reduceSum}{{5}{3}{}{algorithm.5}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {6}{\ignorespaces Shared cooperative algorithm}}{3}{}\protected@file@percent }
+\newlabel{alg:shared1}{{6}{3}{}{algorithm.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}System Description and Experimental Set-up}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Dataset description}{3}{}\protected@file@percent }
+\citation{dbir2}
+\citation{ex11}
+\citation{language}
+\citation{linuxcallgraph}
+\citation{nemeth24}
+\citation{twotone}
+\citation{dbir2}
+\citation{ex11}
+\citation{language}
+\citation{linuxcallgraph}
+\citation{nemeth24}
+\citation{twotone}
+\citation{dbir2}
+\citation{ex11}
+\citation{language}
+\citation{linuxcallgraph}
+\citation{nemeth24}
+\citation{twotone}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Structural patterns of the benchmark sparse matrices.}}{4}{}\protected@file@percent }
+\newlabel{tab:my_label}{{I}{4}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}System Description}{4}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Benchmark system specs}}{4}{}\protected@file@percent }
+\newlabel{tab:benchmarkSystem}{{II}{4}{}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Experimental Set-up}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Block size estimation}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Experimental Benchmarks}{4}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces GFLOPs/s comparison between parallel and sequential implementations}}{4}{}\protected@file@percent }
+\newlabel{tab:GFLOPS}{{III}{4}{}{table.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Bandwidth (GB/s) comparison between parallel implementations}}{4}{}\protected@file@percent }
+\newlabel{tab:BW}{{IV}{4}{}{table.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Performance offerences between the four algorithms}}{4}{}\protected@file@percent }
+\newlabel{fig:flops-graph}{{2}{4}{}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Results and conclusion}{4}{}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{cuSPARSE}{1}
+\bibcite{ginkgo}{2}
+\bibcite{suitesparse}{3}
+\bibcite{dbir2}{4}
+\bibcite{ex11}{5}
+\bibcite{language}{6}
+\bibcite{linuxcallgraph}{7}
+\bibcite{nemeth24}{8}
+\bibcite{twotone}{9}
+\@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
+\gdef \@abspage@last{5}
