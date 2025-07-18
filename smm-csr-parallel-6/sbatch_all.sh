@@ -12,7 +12,6 @@ nvidia-smi
 echo " "
 echo "---------- Processing matrices  ----------"
 ./bin/smm-csr-parallel-6 ../data/dbir2.mtx $1 $2 $3 $4
-./bin/smm-csr-parallel-6 ../data/ifiss_mat.mtx $1 $2 $3 $4
 ./bin/smm-csr-parallel-6 ../data/ex11.mtx $1 $2 $3 $4
 ./bin/smm-csr-parallel-6 ../data/language.mtx $1 $2 $3 $4
 ./bin/smm-csr-parallel-6 ../data/Linux_call_graph.mtx $1 $2 $3 $4

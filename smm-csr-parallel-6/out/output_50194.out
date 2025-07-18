@@ -1,0 +1,231 @@
+Fri Jul 18 21:52:27 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA L40S                    On  |   00000000:41:00.0 Off |                    0 |
+| N/A   28C    P8             33W /  350W |       0MiB /  46068MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+ 
+---------- Processing matrices  ----------
+Launching SPVM on matrix ../data/dbir2.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+copying data in the CUDA memory... 
+The algorithm will launch with 348 blocks, 384 threads, 24576 shared memory per block
+performing matrix to vector multiplication...
+iteration 0 took 0.021664 ms
+iteration 1 took 0.021504 ms
+iteration 2 took 0.021504 ms
+iteration 3 took 0.022464 ms
+iteration 4 took 0.021504 ms
+iteration 5 took 0.022368 ms
+iteration 6 took 0.021728 ms
+iteration 7 took 0.021504 ms
+iteration 8 took 0.022528 ms
+iteration 9 took 0.021504 ms
+iteration 10 took 0.022528 ms
+iteration 11 took 0.022528 ms
+iteration 12 took 0.022528 ms
+iteration 13 took 0.022528 ms
+iteration 14 took 0.021632 ms
+iteration 15 took 0.021504 ms
+iteration 16 took 0.022528 ms
+iteration 17 took 0.021504 ms
+iteration 18 took 0.021248 ms
+iteration 19 took 0.021504 ms
+Executed 20 iterations, floating point operations: 2316318 average time: 0.021910 ms variance: 0.000000 ms
+average GFLOP/s: 105.720529
+Effective bandwidth: 659.449984 GB/s
+checking results...
+The algorithm works good :)
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/ex11.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+copying data in the CUDA memory... 
+The algorithm will launch with 329 blocks, 384 threads, 24576 shared memory per block
+performing matrix to vector multiplication...
+iteration 0 took 0.013312 ms
+iteration 1 took 0.013056 ms
+iteration 2 took 0.013152 ms
+iteration 3 took 0.014080 ms
+iteration 4 took 0.013312 ms
+iteration 5 took 0.013312 ms
+iteration 6 took 0.013312 ms
+iteration 7 took 0.013440 ms
+iteration 8 took 0.013120 ms
+iteration 9 took 0.013312 ms
+iteration 10 took 0.013312 ms
+iteration 11 took 0.013216 ms
+iteration 12 took 0.013440 ms
+iteration 13 took 0.013312 ms
+iteration 14 took 0.013312 ms
+iteration 15 took 0.013312 ms
+iteration 16 took 0.012320 ms
+iteration 17 took 0.012416 ms
+iteration 18 took 0.013312 ms
+iteration 19 took 0.013312 ms
+Executed 20 iterations, floating point operations: 2193896 average time: 0.013229 ms variance: 0.000000 ms
+average GFLOP/s: 165.840558
+Effective bandwidth: 1010.113935 GB/s
+checking results...
+Mismatch on 0
+Found 15229 mismatches with max epsilon 80.000000 . Please check if your algorithm works
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/language.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+copying data in the CUDA memory... 
+The algorithm will launch with 365 blocks, 384 threads, 24576 shared memory per block
+performing matrix to vector multiplication...
+iteration 0 took 0.021504 ms
+iteration 1 took 0.021376 ms
+iteration 2 took 0.020544 ms
+iteration 3 took 0.020800 ms
+iteration 4 took 0.020512 ms
+iteration 5 took 0.020480 ms
+iteration 6 took 0.020672 ms
+iteration 7 took 0.021184 ms
+iteration 8 took 0.020416 ms
+iteration 9 took 0.021216 ms
+iteration 10 took 0.020480 ms
+iteration 11 took 0.020480 ms
+iteration 12 took 0.021504 ms
+iteration 13 took 0.020416 ms
+iteration 14 took 0.021376 ms
+iteration 15 took 0.020544 ms
+iteration 16 took 0.020288 ms
+iteration 17 took 0.020480 ms
+iteration 18 took 0.021536 ms
+iteration 19 took 0.020416 ms
+Executed 20 iterations, floating point operations: 2432668 average time: 0.020807 ms variance: 0.000000 ms
+average GFLOP/s: 116.918090
+Effective bandwidth: 931.702796 GB/s
+checking results...
+Mismatch on 333
+Found 16634 mismatches with max epsilon 0.000000 . Please check if your algorithm works
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/Linux_call_graph.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+copying data in the CUDA memory... 
+The algorithm will launch with 363 blocks, 384 threads, 24576 shared memory per block
+performing matrix to vector multiplication...
+iteration 0 took 0.053952 ms
+iteration 1 took 0.055072 ms
+iteration 2 took 0.053088 ms
+iteration 3 took 0.052224 ms
+iteration 4 took 0.052320 ms
+iteration 5 took 0.052256 ms
+iteration 6 took 0.054272 ms
+iteration 7 took 0.052224 ms
+iteration 8 took 0.055104 ms
+iteration 9 took 0.052224 ms
+iteration 10 took 0.054048 ms
+iteration 11 took 0.054112 ms
+iteration 12 took 0.055296 ms
+iteration 13 took 0.053152 ms
+iteration 14 took 0.053248 ms
+iteration 15 took 0.051968 ms
+iteration 16 took 0.052224 ms
+iteration 17 took 0.055392 ms
+iteration 18 took 0.052224 ms
+iteration 19 took 0.052960 ms
+Executed 20 iterations, floating point operations: 2417816 average time: 0.053355 ms variance: 0.000001 ms
+average GFLOP/s: 45.315291
+Effective bandwidth: 344.780697 GB/s
+checking results...
+The algorithm works good :)
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/nemeth24.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+copying data in the CUDA memory... 
+The algorithm will launch with 227 blocks, 384 threads, 24576 shared memory per block
+performing matrix to vector multiplication...
+iteration 0 took 0.012192 ms
+iteration 1 took 0.012192 ms
+iteration 2 took 0.012064 ms
+iteration 3 took 0.012352 ms
+iteration 4 took 0.012000 ms
+iteration 5 took 0.012288 ms
+iteration 6 took 0.012352 ms
+iteration 7 took 0.012128 ms
+iteration 8 took 0.012288 ms
+iteration 9 took 0.012288 ms
+iteration 10 took 0.013024 ms
+iteration 11 took 0.012288 ms
+iteration 12 took 0.012480 ms
+iteration 13 took 0.012288 ms
+iteration 14 took 0.012064 ms
+iteration 15 took 0.012288 ms
+iteration 16 took 0.013056 ms
+iteration 17 took 0.013024 ms
+iteration 18 took 0.012288 ms
+iteration 19 took 0.013120 ms
+Executed 20 iterations, floating point operations: 1516056 average time: 0.012399 ms variance: 0.000000 ms
+average GFLOP/s: 122.277225
+Effective bandwidth: 742.863809 GB/s
+checking results...
+Mismatch on 0
+Found 8127 mismatches with max epsilon 0.000001 . Please check if your algorithm works
+Operation done. Cleaning heap and VRAM...
+
+Launching SPVM on matrix ../data/twotone.mtx
+Matrix read successfully :)
+Converting into CSR ... 
+generating input and output vectors for the moltiplication... 
+copying data in the CUDA memory... 
+The algorithm will launch with 367 blocks, 384 threads, 24576 shared memory per block
+performing matrix to vector multiplication...
+iteration 0 took 0.015360 ms
+iteration 1 took 0.015296 ms
+iteration 2 took 0.015360 ms
+iteration 3 took 0.016096 ms
+iteration 4 took 0.015584 ms
+iteration 5 took 0.015360 ms
+iteration 6 took 0.015552 ms
+iteration 7 took 0.015360 ms
+iteration 8 took 0.015264 ms
+iteration 9 took 0.015360 ms
+iteration 10 took 0.016256 ms
+iteration 11 took 0.016128 ms
+iteration 12 took 0.015392 ms
+iteration 13 took 0.015232 ms
+iteration 14 took 0.015360 ms
+iteration 15 took 0.016096 ms
+iteration 16 took 0.016384 ms
+iteration 17 took 0.015360 ms
+iteration 18 took 0.015392 ms
+iteration 19 took 0.016160 ms
+Executed 20 iterations, floating point operations: 2448448 average time: 0.015613 ms variance: 0.000000 ms
+average GFLOP/s: 156.821813
+Effective bandwidth: 1033.738567 GB/s
+checking results...
+Mismatch on 0
+Found 30634 mismatches with max epsilon 0.000946 . Please check if your algorithm works
+Operation done. Cleaning heap and VRAM...
+
+ 

@@ -11,11 +11,10 @@ module load CUDA/12.3.2
 nvidia-smi
 echo " "
 echo "---------- Processing matrices  ----------"
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/dbir2.mtx $1 $2 $3 $4
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/ifiss_mat.mtx $1 $2 $3 $4
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/ex11.mtx $1 $2 $3 $4
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/language.mtx $1 $2 $3 $4
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/Linux_call_graph.mtx $1 $2 $3 $4
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/nemeth24.mtx $1 $2 $3 $4
-sudo ncu --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/twotone.mtx $1 $2 $3 $4
+sudo $(which ncu) --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/dbir2.mtx $1 $2 $3 $4
+sudo $(which ncu) --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/ex11.mtx $1 $2 $3 $4
+sudo $(which ncu) --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/language.mtx $1 $2 $3 $4
+sudo $(which ncu) --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/Linux_call_graph.mtx $1 $2 $3 $4
+sudo $(which ncu) --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/nemeth24.mtx $1 $2 $3 $4
+sudo $(which ncu) --metrics "$(paste -sd, ../data/metrics.txt)" --launch-count=1 --launch-skip=5 ./bin/smm-csr-parallel-6 ../data/twotone.mtx $1 $2 $3 $4
 echo " "
