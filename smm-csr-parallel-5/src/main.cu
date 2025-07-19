@@ -13,7 +13,7 @@
 #define WARMUP_CYCLES 5
 #define ITERATIONS 20
 
-#define DEFAULT_THREADS_NUMBER  256
+#define DEFAULT_THREADS_NUMBER  512
 #define DEFAULT_BLOCKS_NUMBER   1
 
 #define NOT_NULL_PER_BLOCK      3328
@@ -58,12 +58,11 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input,uns
     selectedRowIndex=__shfl_sync(0xFFFFFFFF,selectedRowIndex, 0);
 
     while(selectedRowIndex<blockEnd) {
-        int startRow=matrix->rowArray[selectedRowIndex];
+        int startRow=matrix->rowArray[selectedRowIndex]+laneId;
         int endRow=matrix->rowArray[selectedRowIndex+1];
         float acc = 0;
         while(startRow<endRow) {
-            unsigned int index=min(startRow+laneId,endRow);
-            acc=fmaf(matrix->dataArray[index],__ldg(&cachedInput[matrix->colArray[index]])*(index<endRow),acc);
+            acc=fmaf(matrix->dataArray[startRow],__ldg(&cachedInput[matrix->colArray[startRow]]),acc);
             startRow+=warpSize;
         }
         
@@ -126,23 +125,7 @@ GPUMap getAllocation(int device, unsigned int notNull, unsigned int customBlocks
     if (!custom) {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, device);
-
-        int major = prop.major;
-        int minor = prop.minor;
-        int coresPerSM;
-        switch ((major << 4) + minor) {
-            case 0x50: coresPerSM = 128; break; // Maxwell
-            case 0x60: coresPerSM = 64; break;  // Pascal
-            case 0x70: coresPerSM = 64; break;  // Volta
-            case 0x75: coresPerSM = 64; break;  // Turing
-            case 0x80: coresPerSM = 64; break;  // Ampere (datacenter)
-            case 0x86: coresPerSM = 128; break; // Ampere
-            case 0x87: coresPerSM = 128; break; // RTX Axxx Mobile
-            case 0x89: coresPerSM = 128; break; // Ada Lovelace
-            default: coresPerSM = 64; break;
-        }
-        
-        map.threads=prop.sharedMemPerBlock/coresPerSM;
+        map.threads=DEFAULT_THREADS_NUMBER;
         map.blocks=notNull/NOT_NULL_PER_BLOCK;
     } else {
         map.threads=customThreads;

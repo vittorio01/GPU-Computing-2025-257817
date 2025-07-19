@@ -320,8 +320,7 @@ The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suites
 \end{table}
 
 \subsection{System Description}
-The system used for the execution of the benchmarks uses CUDA 12.3.2 for compiling the source code, and is composed by a Intel(R) Xeon(R) Silver 4214 CPU and A Nvidia A30 GPU. The Nvidia A30 is based on Ampere architecture and has 56 Stream Multiprocessors with 96KB available shared memory per block.
-The maximum memory bandwidth is $933GB/s$ and the $FP32$ performance is of $10.32TFlops$ 
+The system used for the execution of the benchmarks uses CUDA 12.3.2 for compiling the source code, and is composed by a Intel(R) Xeon(R) Silver 4214 CPU and an Nvidia L40S GPU. The Nvidia L40S is based on Ada Lovelace architecture and has 142 Stream Multiprocessors with 96KB available shared memory per block, maximum memory bandwidth of $864GB/s$ and $91,61TFlops$ for $FP32$ operations.
 
 \subsection{Experimental Set-up}
 The performance is measured using the value of GFlops obtained by the execution time elapsed measured with $cudaEventRecord$ functions for CUDA algorithms and considering also the DRAM troughput, Compute utilization and Shared memory efficiency. 

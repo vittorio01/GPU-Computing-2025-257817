@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex main"] 0 "main.aux" "main.bbl" "main" 1752859689.37113 -1
+["bibtex main"] 0 "main.aux" "main.bbl" "main" 1752916823.6638 -1
   "./references.bib" 1752746360.03981 1336 23e9c8b4fa6b3e32c4a7b4f4a03cd76e ""
   "/nix/store/f8fxz33kaqksq45sshcq2lms1xvsfz7s-texlive-2024-env-texmfdist/bibtex/bst/ieeetran/IEEEtran.bst" 1 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "main.aux" 1752859689.21218 4996 0888d50b33d1db1d0a7bacc9f4b5d4a4 "pdflatex"
+  "main.aux" 1752916823.4939 4996 0888d50b33d1db1d0a7bacc9f4b5d4a4 "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1752859688.86837 "/home/vittorio/GitHub/GPU-Computing-2025-257817/paper/deriverable2/main.tex" "main.pdf" "main" 1752859689.37135 0
-  "/home/vittorio/GitHub/GPU-Computing-2025-257817/paper/deriverable2/main.tex" 1752859688.64219 19493 17babf2652ad094dc49258a55498793d ""
+["pdflatex"] 1752916823.13714 "/home/vittorio/GitHub/GPU-Computing-2025-257817/paper/deriverable2/main.tex" "main.pdf" "main" 1752916823.66395 0
+  "/home/vittorio/GitHub/GPU-Computing-2025-257817/paper/deriverable2/main.tex" 1752916822.96187 19492 c19adf53a5e06b808103f108215712d0 ""
   "/nix/store/0g09282c6amly6biazhh7rhz3xa2k3q8-texlive-2024-env/share/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1 5467241 3c3f8eb8d46b9af4d3386e76e9b4b73e ""
   "/nix/store/0g09282c6amly6biazhh7rhz3xa2k3q8-texlive-2024-env/share/texmf-var/web2c/pdftex/pdflatex.fmt" 1 3353347 e5b84f5240432c8fb1ba675f3d1183dc ""
   "/nix/store/0g09282c6amly6biazhh7rhz3xa2k3q8-texlive-2024-env/share/texmf-var/web2c/texmf.cnf" 1 43655 156f747d503e73d061c43a664b9c81a7 ""
@@ -104,9 +104,9 @@
   "/nix/store/f8fxz33kaqksq45sshcq2lms1xvsfz7s-texlive-2024-env-texmfdist/tex/latex/xkeyval/xkeyval.sty" 1 4937 4ce600ce9bd4ec84d0250eb6892fcf4f ""
   "images/CSR.png" 1752746290.61152 32038 b207c7a23ccd07e9931022f788c40232 ""
   "images/GFLOP_s.png" 1752746290.61178 14816 00c9527531cfc33bdb227cef9473ada9 ""
-  "main.aux" 1752859689.21218 4996 0888d50b33d1db1d0a7bacc9f4b5d4a4 "pdflatex"
+  "main.aux" 1752916823.4939 4996 0888d50b33d1db1d0a7bacc9f4b5d4a4 "pdflatex"
   "main.bbl" 1752859180.73234 2243 609c9ce20b334736b26dd43dff40d8f4 "bibtex main"
-  "main.tex" 1752859688.64219 19493 17babf2652ad094dc49258a55498793d ""
+  "main.tex" 1752916822.96187 19492 c19adf53a5e06b808103f108215712d0 ""
   (generated)
   "main.aux"
   "main.log"

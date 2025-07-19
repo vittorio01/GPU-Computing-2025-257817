@@ -22,6 +22,8 @@
 #define SHARED_BUFFER_SIZE      SHARED_PER_THREAD
 #define SHARED_MEMORY_DIM       (SHARED_BUFFER_SIZE*sizeof(float))
 
+#define NSM                     2
+
 #define NOT_NULL_PER_BLOCK      3328
 
 __inline__ __device__ float reduceSum(float value) {
@@ -148,23 +150,8 @@ GPUMap getAllocation(int device, unsigned int notNull, unsigned int customBlocks
     if (!custom) {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, device);
-
-        int major = prop.major;
-        int minor = prop.minor;
-        int coresPerSM;
-        switch ((major << 4) + minor) {
-            case 0x50: coresPerSM = 128; break; // Maxwell
-            case 0x60: coresPerSM = 64; break;  // Pascal
-            case 0x70: coresPerSM = 64; break;  // Volta
-            case 0x75: coresPerSM = 64; break;  // Turing
-            case 0x80: coresPerSM = 64; break;  // Ampere (datacenter)
-            case 0x86: coresPerSM = 128; break; // Ampere
-            case 0x87: coresPerSM = 128; break; // RTX Axxx Mobile
-            case 0x89: coresPerSM = 128; break; // Ada Lovelace
-            default: coresPerSM = 64; break;
-        }
         
-        map.threads=prop.sharedMemPerBlock/coresPerSM;
+        map.threads=prop.sharedMemPerBlock/(NSM*(SHARED_PER_THREAD+2)*sizeof(float));
         map.blocks=notNull/NOT_NULL_PER_BLOCK;
     } else {
         map.threads=customThreads;
