@@ -19,14 +19,8 @@
 #define NOT_NULL_PER_BLOCK      3328
 
 /*
-Implementation of the second algorithm for the parallel SpMV multiplication for CSR matrices. 
+Implementation of the fifth algorithm for the parallel SpMV multiplication for CSR matrices. 
 
-The row vector divided for the number of block used for the multiplication (if the division is not perfect the last block obtains less rows to scan).
-This time for each block the respective threads contends the next pending row in a dynamic way:
-1- An integer variable in the shared memory is initialized at 0 and used to identify the next pending row
-2- each thread in a certain block uses the function atomicAdd to receive the value and automatically increment it for the next threads. 
-3- If the readed value is valid (not greather that the rows to process per block) each thread performs the SpMV like the first algorithm, saves the result
-   and jumps to the step 2.
 */
 __inline__ __device__ float reduceSum(float value) {
     value += __shfl_down_sync(0xFFFFFFFF, value , 16);
@@ -37,7 +31,7 @@ __inline__ __device__ float reduceSum(float value) {
     return value;
 }
 
-
+//main kernel
 __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input,unsigned int* blockDivision) {
     float* __restrict__ cachedInput=input->dataArray;
     unsigned short laneId = threadIdx.x % warpSize;  
@@ -76,6 +70,7 @@ __global__ void vmcsr_mul(Vector* output, SparseMatrix* matrix,Vector* input,uns
     }
 }
 
+//Binary search kernel 
 __global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {    
     unsigned int elementsPerBlock = (matrix->notNull + gridDim.x - 1) / gridDim.x;
     unsigned int blockStart = blockIdx.x * elementsPerBlock;
@@ -114,6 +109,7 @@ void vmcsr_mul_sequential(Vector* output, SparseMatrix* matrix,Vector* vector) {
     }
 }
 
+//Row and thread organization
 typedef struct GPUMap {
     unsigned int blocks;
     unsigned int threads;

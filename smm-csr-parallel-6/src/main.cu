@@ -35,6 +35,7 @@ __inline__ __device__ float reduceSum(float value) {
     return value;
 }
 
+//Binary search function per thread
 __inline__ __device__ int rowSearch(unsigned int* array, unsigned int lastElement, unsigned int value) {
     int row=-1;
     unsigned int left=0;
@@ -53,7 +54,7 @@ __inline__ __device__ int rowSearch(unsigned int* array, unsigned int lastElemen
     return row;
 }
 
-
+//main kernel 
 __global__ void vmcsr_mul(Vector* output,SparseMatrix* matrix,Vector* input,unsigned int* blockDivision) {    
     float* __restrict__ cachedInput=input->dataArray; 
     extern __shared__ unsigned int loadedRows[];
@@ -101,6 +102,7 @@ __global__ void vmcsr_mul(Vector* output,SparseMatrix* matrix,Vector* input,unsi
     }
 }
 
+//Bynary search kernel
 __global__ void vmcsr_div(SparseMatrix* matrix,unsigned int* blockDivision) {    
     unsigned int elementsPerBlock = (matrix->notNull + gridDim.x - 1) / gridDim.x;
     unsigned int blockStart = blockIdx.x * elementsPerBlock;

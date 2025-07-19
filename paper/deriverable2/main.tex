@@ -37,39 +37,32 @@ Sparse Matrix, SpMV, CUDA, Parallelization, Storage Format
 \end{IEEEkeywords}
 
 \section{Introduction}
-The algorithm of sparse matrix-dense vector multiplication (SpMV) is an optimized version of the traditional matrix-vector multiplication
-designed to handle cases where the matrix is organized in a low density of non-zero entries. 
-This technique is particularly useful in scenarios that involves very large sparse matrices because it allows to reduce the used space for 
-storing that large structures and, at the same time, optimizes memory access patterns during computational steps. 
-
-Because the SpMV multiplication should handle matrices with millions or billions of not null elements, to obtain good results is necessary to use parallelization techniques 
-on GPUs rather than sequential solution for CPUs. 
+The SpMV (sparse matrix-dense vector multiplication) algorithm is an optimized form of matrix-vector multiplication tailored for matrices with a low density of non-zero entries. 
+It is especially effective for very large sparse matrices, as it reduces storage requirements and improves memory access during computation. Given that such matrices often contain millions 
+or billions of non-zero elements, achieving good performance requires parallelization on GPUs rather than relying on sequential CPU-based solutions.
 
 \section{Problem Statement}
-In the SpVM multiplication we consider a matrix coded in a sparse format (in this case the CSR format) and an input vector that has the same size of its columns number. 
+SpMV multiplication involves a matrix coded in a sparse format (in this case the CSR format) and an input vector matching the number of matrix columns. Each output element is obtained by computing the dot product 
+between the non-zero entries of a matrix row and the corresponding elements in the input vector. 
 \\
-Each elements of the resulting vector is computed by performing the dot products of each not null elements of the matrix with the input vector and accumulating them in the corresponding row position.
-\\
-The main objective of this report is to propose a common solution for the SpMV for CUDA devices and propose more advanced optimizations techniques to improve the overall performances.
-
+This report aims to present more CUDA-based solution for SpMV that matches different matrix distributions, along with advanced optimization techniques to enhance performance.
 \subsection{Storage Format}
 The CSR for sparse matrices is a storage format that involves three different arrays to represent the information: 
 \begin{itemize}
-    \item The data array, that contains all not null terms of the original matrix.
-    \item The column array, where for each element in the data vector specifies its column coordinate.
-    \item The row array, which contains the start and the end pointers for each row to the data and column arrays. these two pair of pointers indicates which nut null terms in the data array are contained in that specific row. 
+    \item {\it{The data array (dataArray)}}, that contains all not-null terms of the original matrix.
+    \item {\it{The column array (colArray)}}, where for each element in the data vector specifies its column coordinate.
+    \item {\it{The row array (rowArray)}}, which contains the start and the end pointers for each row to the data and column arrays. these two pair of pointers indicates which nut null terms in the data array are contained in that specific row. 
 \end{itemize}
-The size of the data and column arrays depends on the number of not null elements and the size of the row array depends on the number of the rows in the original matrix. 
+The size of the data and column arrays depends on the number of not-null elements and the size of the row array depends on the number of the rows in the original matrix. 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\linewidth]{images/CSR.png}
+    \includegraphics[width=0.6\linewidth]{images/CSR.png}
     \caption{Data organization in CSR structure}
     \label{fig:csr-format}
 \end{figure}
 
 \subsection{Parallelization}
-To improve the overall performance, the parallel implementations of the first algorithm are designed to be executed on Nvidia GPUs and programmed in CUDA.
-The CUDA language model permits to run a kernel on different concurrent threads, which are scheduled and executed by computational elements called CUDA cores. 
+In the CUDA language model, used for programming on Nvidia\cite{nvidia} GPUs, enables running a kernel across many concurrent threads, which are managed and scheduled by CUDA cores, allowing efficient parallel execution.
 
 To improve the performance and the organization of the parallel algorithms, CUDA architectures provides:
 \begin{itemize}
@@ -84,6 +77,7 @@ In CUDA architectures there are predefined mechanisms to allow threads in the sa
 For example, the function $reduceSum(acc)$ uses five shuffle functions to accumulate all contribution given by threads in the same warp on the thread 0. 
 
 \begin{algorithm}[h]
+\small
 \caption{Warp reduction system}
 \begin{algorithmic}[1]
 \Procedure{reduceSum}{acc}
@@ -104,16 +98,17 @@ cellSize=\frac{N + C - 1}{C}
 \end{equation}
 From the obtained division, the {\it{start point}} and the {\it{end point}} for each cell are defined by:
 \begin{equation}
-start=cellSize*cId
-\end{equation}
-\begin{equation}
-end=min(start+cellSize,N)
+\begin{aligned}
+start &= cellSize \cdot cId\\
+end &= \min(start + cellSize, N)
+\end{aligned}
 \end{equation}
 
 \subsection{Binary Search}
-The binary search is an algorithm that finds the position of a certain element in a sorted array with a logarithmic complexity $O(log(n))$. The proposed kernels use a modified version 
-of the original algorithm to identify the position of the element nearest but lower or equal than the given value.  
+The binary search is an algorithm that finds the position of a certain element in a sorted array with a complexity $O(log(n))$. The proposed kernels use a modified version 
+of the original algorithm to identify the row from a given index in the {\it{dataArray}} from the matrix.  
 \begin{algorithm}[h]
+\small
 \caption{Adapted binary search}
 \begin{algorithmic}[1]
 \Procedure{binarySearch}{array,size,element}
@@ -144,6 +139,7 @@ In the first dynamic algorithm, the matrix and the vector are processed using a 
 \end{enumerate}
 
 \begin{algorithm}[h!]
+\small
 \caption{Dynamic SpVM algorithm}
 \algorithmicrequire~input, output and matrix structures.
 \begin{algorithmic}[1]
@@ -174,11 +170,12 @@ In the first dynamic algorithm, the matrix and the vector are processed using a 
 The dynamic algorithm can be improved further using a better organization of workload between threads. More performance can then be obtained by:
 \begin{itemize}
     \item {\it{Using the binary search}} in a preliminar kernel (\ref{alg:blockDivisionKernel}) to assign the rows to each block in base of the number of not-null elements of the matrix.
-    \item Instead a single thread, {\it{Assigning a warp for each row}}. In this way, the threads in the warp process 32 partials from very long rows that can per reduced using the {\it{reduceSum}}(\ref{alg:reduceSum}).
-    \item Assigning the read only cache on the input vector to improve the speed by leveraging on the data reusage.
+    \item Instead a single thread, {\it{Assigning a warp for each row}}. In this way, the threads in the warp process 32 partials from very long rows that can per reduced using the {\it{reduceSum}} function (\ref{alg:reduceSum}).
+    \item {\it{Assigning the read only cache}} on the input vector to improve the speed by leveraging on the data reusage and {\it{using fused instructions}}.
 \end{itemize}
 
 \begin{algorithm}[h]
+\small
 \caption{Optimized dynamic algorithm (Parallel-5)}
 \algorithmicrequire~matrix structure, block division array, input vector and output vector structures.
 \begin{algorithmic}[1]
@@ -188,14 +185,12 @@ The dynamic algorithm can be improved further using a better organization of wor
 \State $row=\underline{Row Election}$ 
 \While {$row<blockEnd$}
 \State $startRow,endRow$
-\State $\ \ \uparrow rowArray[row],rowArray[row+1]$
+\State $\ \ \uparrow rowArray[row]+laneId,rowArray[row+1]$
 \State $acc=0$
 \While{${startRow<endRow}$}
-\State $idx=min(startRow+laneId,endRow)$
 \State $col=colArray[idx]$
 \State $acc+=fmaf($
-\State $\ \ dataArray[startRow],\_\_ldg(input[col])$
-\State $\ \ *(startRow+laneId<endRow))$
+\State $\ \ dataArray[startRow],\_\_ldg(input[col]))$
 \State $startRow++$
 \EndWhile
 \State $acc=\underline{ReduceSum}$
@@ -210,6 +205,7 @@ The dynamic algorithm can be improved further using a better organization of wor
 \end{algorithm}
 
 \begin{algorithm}[h]
+\small
 \caption{Row election System}
 \begin{algorithmic}[1]
 \Procedure{RowElection}{}
@@ -224,6 +220,7 @@ The dynamic algorithm can be improved further using a better organization of wor
 \end{algorithm}
 
 \begin{algorithm}[h]
+\small
 \caption{Preliminar kernel}
 \algorithmicrequire~matrix structure, block division array initialized on global memory.
 \begin{algorithmic}[1]
@@ -244,23 +241,24 @@ The dynamic algorithm can be improved further using a better organization of wor
 
 
 \subsection{Shared cooperative algorithm (Parallel-6)}
-The algorithm {\it{parallel-5}} shows poor performances when considering heavily unbalanced matrices. Another approach that tries mitigate those cases divides the shared memory as a buffer where the workload is divided by threads in the same block:
+The dynamic assignment of the rows shows poor performances when considering heavily unbalanced matrices. Another approach that tries mitigate those cases divides the shared memory in three buffers, where the elements to load,store and compute are assigned equally to threads in the same block:
 \begin{itemize}
     \item {\it{sharedBuffer}}, a space of size $B=blockSize.x*N$ used as buffer to contain the result of the multiplication between elements of the matrix and the input vector (each thread operates at max on $N$ elements).
     \item {\it{loadedRows}}, a space of {$R=blockSize.x$} cells used as cache for parts of the CSR row vector (each threads loads one pointer).
-    \item {\it{rowsBuffer}}, a space of {$R-1$} cells used for accumulating partials for a small amount of rows (almost each thread maintaines one cell). 
+    \item {\it{rowsBuffer}}, a space of {$R-1$} cells used for accumulating partials for a small amount of rows (almost each thread stores one cell in the global memory). 
 \end{itemize}
 Using these three different shared spaces, each block performs these steps:
 \begin{enumerate}
     \item The entire block cooperates to {\it{prepare the shared memory}} for processing {$R-1$} rows by initializing with zeroes the {\it{rowsBuffer}} space and loading the necessary CSR pointers from the row array in the {\it{loadedRows}} space.
     \item The threads {\it{load a block of elements}} (maximum $B$ elements) from the matrix and the input vector in a fully coalesced way, perform the multiplications and store the result in {\it{sharedBuffer}}.
-    \item The loaded elements {\it{are divided then in equal strides}} using the ceiling division (\ref{eq:ceiling}) where each thread performs a binary search on {\it{loadedRows}} space to identify the correspondent row index of the first elements of their strides. Then the strides are reduced in partials and accumulated in the {\it{rowsBuffer}} using $atomicAdd()$ in base of the correct row indexes.
+    \item The loaded elements are first divided into equal strides using ceiling division (1). Each thread then performs a binary search (\ref{alg:binarySearch}) over the loadedRows array to find the row index corresponding to the first element of its stride. Subsequently, the strides are partially reduced and accumulated into the rowsBuffer using {\it{atomicAdd}}, based on the identified row indices.
     \item The step 2 and 3 are performed until all necessary elements for the considered rows in {\it{loadedRows}} are processed.
     \item {\it{Each threads stores one result}} from the {\it{rowsBuffer}} to the output vector in the global memory.
     \item All steps from 1 to 5 are repeated until all the rows of the matrix are processed. 
 \end{enumerate}
 The procedure \ref{alg:shared1} shows a heavily simplified representation of the shared cooperative algorithm.
 \begin{algorithm}[h!]
+\small
 \caption{Shared cooperative algorithm}
 \algorithmicrequire~matrix structure, block division array, input vector and output vector structures.
 \begin{algorithmic}[1]
@@ -295,9 +293,7 @@ The procedure \ref{alg:shared1} shows a heavily simplified representation of the
 
 \section{System Description and Experimental Set-up}
 \subsection{Dataset description}
-A dataset composed by 6 matrices is used for testing and benchmark all four algorithms. These matrices containes a number of not null elements between 1 and 1,5 million and they have different organization and dispersion that challenges the algorithms in different ways:
-The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suitesparse}, a website that contains sample matrices useful for benchmarking algorithms. 
-
+A dataset composed by 6 matrices ,obtained from Matrix Collection \cite{suitesparse}, is used for testing and benchmark all four algorithms. These matrices containes a number of not-null elements between 1 and 1,5 million and they have different organization and dispersion that challenges the algorithms in different ways. 
 \begin{table}[h]
     \centering
     \begin{adjustbox}{width=\columnwidth}
@@ -319,53 +315,44 @@ The used dataset is obtained from the SuiteSparse Matrix Collection \cite{suites
     \label{tab:my_label}
 \end{table}
 
-\subsection{System Description}
+\subsection{System Description and Experimental Set-up}
 The system used for the execution of the benchmarks uses CUDA 12.3.2 for compiling the source code, and is composed by a Intel(R) Xeon(R) Silver 4214 CPU and an Nvidia L40S GPU. The Nvidia L40S is based on Ada Lovelace architecture and has 142 Stream Multiprocessors with 96KB available shared memory per block, maximum memory bandwidth of $864GB/s$ and $91,61TFlops$ for $FP32$ operations.
-
-\subsection{Experimental Set-up}
-The performance is measured using the value of GFlops obtained by the execution time elapsed measured with $cudaEventRecord$ functions for CUDA algorithms and considering also the DRAM troughput, Compute utilization and Shared memory efficiency. 
 \\
-The results obtained by the three kernels are then compared with the library cuSPARSE\cite{cuSPARSE}, the official library supported by Nvidia.
+\\
+The performance is measured by considering the GFlops obtained by the sum of the execution times of all kernels (preliminar and main kernels) measured with $cudaEventRecord$ functions for CUDA algorithms and considering also the DRAM throughput and Compute utilization obtained from Nvidia Nsight Compute \cite{ncu}.
+\\
+The results obtained by the three kernels are then compared with the library cuSPARSE\cite{cuSPARSE}, the official library supported by Nvidia\cite{nvidia}.
 \subsection{Block size estimation}
-The parameters used for launching the kernels are calculated empirically in base of the amount of shared memory available per block, the number of cuda cores per SM and the size of the input matrix. In particular:
+The parameters used for launching the kernels are calculated empirically in base of the amount of shared memory available per block, the number of theoretical threads that should run simultanously in the same SM and the size of the input matrix. In particular:
 \begin{itemize}
-    \item We choose the number of blocks equal to the number of not null elements of the input matrix divided by a constant obtained empirically of around 3328 ($notNull/NotNullPerBlock$).
+    \item The number of blocks to be launched is equal to the number of not-null elements of the input matrix divided by a constant obtained empirically of around 3328 ($notNull/NotNullPerBlock$).
     \item In the kernel \ref{alg:shared1}, the dimension of the shared memory is related on the number of elements that each thread should load and the block dimension ($shared=(elementsPerThread+2)*blockDim*sizeof(float)$).
     \item We can obtain the number of threads per block by considering $N$ block active at the same time in a Stream Multiprocessor, which is limited to the shared memory for the kernel {\it{parallel-6}}. In this case we consider the number of 
             threads equal to $sharedPerSM (Kb)\div[N*(elementsPerThread+2)*sizeof(float)]$. From various benchmarks, the best performances are obtained when considering $N=2$ and $elementsPerThread=14$. For the kernels {\it{parallel-2}} and {\it{parallel-5}} the number of threads can also be fixed at a value of 512 or 256 to obtain stable performances.
 \end{itemize}
 \section{Experimental Benchmarks}
-The following tables shows the values of GFLOPs/s (\ref{tab:GFLOPS}) and effective bandwidth (\ref{tab:BW}) obtained from benchmarking on 256 blocks of 512 using float values. 
-The figure \ref{fig:flops-graph} gives also a visualization of table \ref{tab:GFLOPS}.
-\begin{table}[h]
-    \centering
-    \begin{adjustbox}{width=0.8\columnwidth}
-    \begin{tabular}{lllll}
-    \toprule
-    \textbf{Matrix} & \textbf{Parallel 1} & \textbf{Parallel 2} & \textbf{Parallel 3} & \textbf{Sequential} \\
-    \midrule
-    dbir2 \cite{dbir2} & \textbf{152,93} & 142,78 & 34,8 & 1,69 \\
-    ex11 \cite{ex11} & 71,44 & \textbf{71,74} & 21,02 & 0,38 \\
-    language \cite{language} & 31 & \textbf{82,4} & 1,91 & 0,32\\
-    Linux\_call\_graph \cite{linuxcallgraph} & 0,85 & 1,72 & \textbf{2,51} & 0,25 \\ 
-    nemeth24 \cite{nemeth24} & 43,4 & \textbf{50} & 16,81 & 0,37 \\
-    twotone \cite{twotone} & 44,42 & \textbf{51,84} & 4,7 & 0,42 \\
-    \bottomrule
-    \end{tabular}
-    \end{adjustbox}
-    \vspace{1em}
-    \caption{GFLOPs/s comparison between parallel and sequential implementations}
-    \label{tab:GFLOPS}
-\end{table}
+The benchmarks obtained by launching the four algorithms are represented in the three tables in figure \ref{fig:bench}.
 
-\begin{figure}[H]
+\begin{figure}[h]
     \centering
-    \includegraphics[width=1\linewidth]{images/GFLOP_s.png}
+    \includegraphics[width=1.05\linewidth]{images/benchmarks.png}
     \caption{Performance offerences between the four algorithms}
-    \label{fig:flops-graph}
+    \label{fig:bench}
 \end{figure}
 
 \section{Results and conclusion}
+The benchmarks shows that:
+\begin{itemize}
+    \item The algorithm {\it{parallel-2}} performs better when applied to balanced diagonal matrices with short rows, such as {\it{ex11}}\cite{ex11}, {\it{twotone}}\cite{twotone}, or {\it{nemeth24}}\cite{nemeth24}.
+        This is because a single thread can efficiently handle the computational tasks associated with small rows. Moreover, since smaller rows are more likely to be concentrated within a single DRAM bank, more threads can operate concurrently during a single memory transfer. 
+        On the other hand, the performance on unbalanced matrices like {\it{Linux\_call\_graph}}\cite{linuxcallgraph} are slightly decreased, expecially because the uncoalesced requests from the DRAM (figure \ref{fig:bench} shows a decrease of the DRAM throughput). 
+    \item The algorithm {\it{parallel-5}} shows that the performance for {\it{Linux\_call\_graph}}\cite{linuxcallgraph} thanks to its warp centric structure. Now, because 32 threads operates on the same rows, the workload is more balanced and the memory access are more concentrated (condition that improve the DRAM throughput and the Compute thoughput).
+        \\
+        But, because entire warps are assigned per row, well balanced matrices like {\it{dbir2}}\cite{dbir2} or {\it{twotone}}\cite{twotone} shows worse performanced if compared with {\it{parallel-2}}.
+    \item The {\it{parallel-6}} algorithm employs a different strategy, using perfectly coalesced memory accesses and workload distribution via a shared buffer. This leads to significantly better performance on heavily unbalanced matrices like {\it{Linux\_call\_graph}}\cite{linuxcallgraph}. However, the kernel is more latency-bound due to atomic operations causing contention when many threads accumulate partial results in the same row, as reflected by similar DRAM and Compute throughput values.
+\end{itemize}
+In conclusion, the {\it{parallel-2}} algorithm delivers faster performance on regular and diagonal matrices, while {\it{parallel-6}} demonstrates adaptability across the tested datasets. Revisiting the workload distribution among threads (especially the accumulation process in rowBuffer impelmented in the kernel \ref{alg:shared1}) and implementing an automatic algorithm selection mechanism, 
+the general performance levels could achieve results close to those of cuSPARSE\cite{cuSPARSE}.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
